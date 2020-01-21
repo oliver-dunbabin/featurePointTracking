@@ -1,0 +1,6 @@
+featurePointTracking/
+build-featurePointTracking-Desktop-Debug/
+*.o
+*.pro
+*.user
+*.so
