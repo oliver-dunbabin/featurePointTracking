@@ -47,9 +47,9 @@ void rwJevois::init_camera_proc()
     for (auto& x : msg){
         std::string full_msg;
         write_messages(x);
-        usleep(100000);
+        usleep(1000);
         read_messages(full_msg);
-        usleep(100000);
+        usleep(1000);
     }
 }
 
@@ -66,7 +66,7 @@ bool rwJevois::setJevoisClock()
         auto now_ms = time_point_cast<milliseconds>(now);
         auto now_ms_int = now_ms.time_since_epoch().count();
         int r = now_ms_int % 1000;
-        if (r > 998){
+        if (r == 0){
             //Send clock message to Jevois
             time_t time = system_clock::to_time_t(now);
             tm utc_time = *gmtime(&time);
@@ -78,7 +78,7 @@ bool rwJevois::setJevoisClock()
             string secs     = to_string(utc_time.tm_sec);
 
             string stime = "date " + string(2 - months.length(), '0') + months + string(2 - days.length(), '0') + days
-                    + string(2 - months.length(), '0') + hours + string(2 - mins.length(), '0') + mins
+                    + string(2 - hours.length(), '0') + hours + string(2 - mins.length(), '0') + mins
                     + years + "." + string(2 - secs.length(), '0') + secs;
             this->write_messages(stime);
             time_set = true;
@@ -86,7 +86,7 @@ bool rwJevois::setJevoisClock()
             time_point<high_resolution_clock> time2 = high_resolution_clock::now();
             deltaT = duration_cast<duration<int,std::micro>>(time2 - now).count();
             std::cout << deltaT << std::endl;
-            usleep(1000000);
+            usleep(1000);
             return true;
         }else{
             time_point<high_resolution_clock> time2 = high_resolution_clock::now();
@@ -287,7 +287,7 @@ void rwJevois::start()
     // -------------------------------------------------
     const std::string msg{"streamon\0"};
     write_messages(msg);
-    usleep(100000);
+    usleep(1000);
 
     std::cout << "\nSTART READ THREAD" << std::endl;
     readThread = std::thread(&rwJevois::read_thread,this);
