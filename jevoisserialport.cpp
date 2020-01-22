@@ -79,7 +79,7 @@ void JevoisSerialPort::init()
 // -------------------------------------------------------------------------------------------------
 void JevoisSerialPort::deInit()
 {
-    std::cout << "\nCLOSING PORT";
+    std::cout << "\nCLOSING CAMERA SERIAL PORT";
     if (file < 0){
         fprintf(stderr,"\nNo serial connection exists");
         return;
@@ -90,8 +90,6 @@ void JevoisSerialPort::deInit()
     if(result){
         fprintf(stderr, "\nWARNING: Error on port close (%i)", result);
     }
-
-    std::cout << std::endl;
 
     initStatus = SERIAL_PORT_CLOSED;
 }
@@ -114,8 +112,9 @@ void JevoisSerialPort::stop()
 // -------------------------------------------------------------------
 //   Quit Handler
 // -------------------------------------------------------------------
-void JevoisSerialPort::handle_quit(int sig)
+void JevoisSerialPort::handle_quit()
 {
+
     try{
         stop();
     }
@@ -334,8 +333,6 @@ int JevoisSerialPort::write_msg(const std::string &msg)
     char buffer[len+1];
     msg.copy(buffer,len,0);
     buffer[len] = '\0';
-
-    std::cout << buffer << std::endl;
 
     // Write buffer to serial port, locks port whilst writing
     //mutex.lock();

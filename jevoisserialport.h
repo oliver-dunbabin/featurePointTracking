@@ -55,7 +55,7 @@ public:
     void start();
     void stop();
 
-    void handle_quit(int);
+    void handle_quit();
 
     int bytesRead;
     int initStatus;

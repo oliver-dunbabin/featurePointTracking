@@ -31,8 +31,7 @@ struct harrisMessageFP {
                         harrisHeader.sync2 = SERIAL_SYNC2;
                         harrisHeader.messageID = JEVOISMSGID;}
     msg_header harrisHeader;
-    uint64_t timeI;                                     // Time frame was grabbed (since start of program)
-    uint64_t timeF;                                     // Time message was sent (since start of program)
+    uint64_t time;                                     // Time frame was grabbed (since epoch)
     uint16_t imageWidth;                                // Width of input frame
     uint16_t imageHeight;                               // Height of input frame
     uint16_t fpCoord[NUMCORNERS*NUMPERBIN][2];          // Harris feature point coordinate (col * row)
@@ -56,6 +55,8 @@ public:
 
     void read_messages();
 
+    int write_messages(const std::string &, std::chrono::time_point<std::chrono::system_clock> prevT);
+
     int write_messages(const std::string &);
 
     void start();
@@ -64,7 +65,7 @@ public:
 
     bool setJevoisClock();
 
-    void handle_quit(int);
+    void handle_quit();
 
 private:
     bool time_to_exit;

@@ -58,6 +58,7 @@ void Onboard::updateOnboard()
     data.fpTimeI = data.timer.now();
 
     if (clock_set){
+        std::cout << "Clock Set successful" << std::endl;
         while(!time_to_exit){
 
             sensorUpdate();
@@ -68,6 +69,32 @@ void Onboard::updateOnboard()
     }else{
         perror("Could not synchronise JEVOIS and HOST clocks");
     }
+
+    handle_quit();
+
+}
+
+void Onboard::testCamera()
+{
+
+    sPort->start();
+
+    bool clock_set = camera->setJevoisClock();
+
+    camera->start();
+
+    data.fpTimeI = data.timer.now();
+
+    if (clock_set){
+        while(!time_to_exit){
+
+            camUpdate();
+        }
+    }else{
+        perror("Could not synchronise JEVOIS and HOST clocks");
+    }
+
+    handle_quit();
 }
 
 bool Onboard::camUpdate()
@@ -78,12 +105,11 @@ bool Onboard::camUpdate()
 
     bool msgGrab = camera->harrisMsgBuf.pop(&sensorMsg);
     if (msgGrab){
-        fpMsg.time_stmpI    = sensorMsg.timeI;
-        fpMsg.time_stmpF    = sensorMsg.timeF;
+        fpMsg.time_stmp     = sensorMsg.time;
         fpMsg.imgHeight     = sensorMsg.imageHeight;
         fpMsg.imgWidth      = sensorMsg.imageWidth;
 
-        camString += std::to_string(sensorMsg.timeI) + "," + std::to_string(sensorMsg.timeF);
+        camString += std::to_string(sensorMsg.time);
 
         int j = 0;
         for(int i = 0; i < constants::MAXFPS; i++){
@@ -137,7 +163,7 @@ void Onboard::logEstimates()
     const camMessage *fpMsg     = data.getCamMsg();
     const vehicleState *vEst    = data.getVState();
     std::string estData;
-    estData += std::to_string(fpMsg->time_stmpI);
+    estData += std::to_string(fpMsg->time_stmp);
     estData += "," + std::to_string(vEst->pos.X) + "," + std::to_string(vEst->pos.Y) + "," + std::to_string(vEst->pos.Z) + "," +std::to_string(vEst->quat.Q0)
             + "," + std::to_string(vEst->quat.Q1) + "," + std::to_string(vEst->quat.Q2) + "," + std::to_string(vEst->quat.Q3);
 
@@ -164,8 +190,8 @@ void Onboard::sensorUpdate()
 
 void Onboard::stopOnboard()
 {
-
     time_to_exit = true;
+    std::cout << "\nCLOSING FILES\n" << std::endl;
     fpEstFile->close();
     fpMeasFile->close();
     PoseFile->close();
@@ -176,8 +202,29 @@ void Onboard::stopOnboard()
 // -------------------------------------------------------------------
 //   Quit Handler
 // -------------------------------------------------------------------
-void Onboard::handle_quit(int sig)
+void Onboard::handle_quit()
 {
+
+    try{
+        camera_exit->handle_quit();
+    }
+    catch (int error){
+        fprintf(stderr,"\nWarning, could not stop CAMERA READ interface\n");
+    }
+
+    try{
+        sPort_exit->handle_quit();
+    }
+    catch (int error){
+        fprintf(stderr,"\nWarning, could not stop SERIAL PORT interface\n");
+    }
+
+    try{
+        t265_exit->handle_quit();
+    }
+    catch (int error){
+        fprintf(stderr,"\nWarning, could not stop T265 interface\n");
+    }
 
     try{
         stopOnboard();
@@ -186,24 +233,4 @@ void Onboard::handle_quit(int sig)
         fprintf(stderr,"\nWarning, could not stop ONBOARD interface\n");
     }
 
-    try{
-        sPort_exit->handle_quit(sig);
-    }
-    catch (int error){
-        fprintf(stderr,"\nWarning, could not stop SERIAL PORT interface\n");
-    }
-
-    try{
-        camera_exit->handle_quit(sig);
-    }
-    catch (int error){
-        fprintf(stderr,"\nWarning, could not stop CAMERA READ interface\n");
-    }
-
-    try{
-        t265_exit->handle_quit(sig);
-    }
-    catch (int error){
-        fprintf(stderr,"\nWarning, could not stop T265 interface\n");
-    }
 }

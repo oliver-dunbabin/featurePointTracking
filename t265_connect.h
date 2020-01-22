@@ -32,7 +32,7 @@ public:
 
     void setData(vehicleState *X);
 
-    void handle_quit(int sig);
+    void handle_quit();
 
 private:
     void read_RS();

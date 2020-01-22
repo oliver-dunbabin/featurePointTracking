@@ -15,11 +15,13 @@ public:
     Onboard(bool log);
     ~Onboard();
 
+    bool time_to_exit;
+
     void updateOnboard();
 
     void stopOnboard();
 
-    void handle_quit(int);
+    void testCamera();
 
 private:
 
@@ -31,7 +33,6 @@ private:
     T265_Connect *t265_exit;
 
     shared data;
-    bool time_to_exit;
     bool log_data;
     LogData *fpMeasFile;
     LogData *PoseFile;
@@ -44,6 +45,8 @@ private:
     bool vehicleUpdate();
 
     void logEstimates();
+
+    void handle_quit();
 
 };
 

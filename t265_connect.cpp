@@ -91,6 +91,8 @@ void T265_Connect::stopThread()
 
     if(read_status){
 
+        std::cout << "\nCLOSING T265 READ THREAD";
+
         read_status = false;
         if(readThread.joinable()){
             readThread.join();
@@ -143,7 +145,7 @@ void T265_Connect::readPose(vehicleState *pose)
 // -------------------------------------------------------------------
 //   Quit Handler
 // -------------------------------------------------------------------
-void T265_Connect::handle_quit(int sig)
+void T265_Connect::handle_quit()
 {
     try{
         stopThread();

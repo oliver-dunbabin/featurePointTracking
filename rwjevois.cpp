@@ -1,4 +1,5 @@
 #include "rwjevois.h"
+#include "chrono"
 
 // Checksum calculation
 unsigned char calculateCheckSum(unsigned char *buf, int byteCount, int index){
@@ -65,19 +66,27 @@ bool rwJevois::setJevoisClock()
         auto now_ms = time_point_cast<milliseconds>(now);
         auto now_ms_int = now_ms.time_since_epoch().count();
         int r = now_ms_int % 1000;
-        if (r > 999 || r == 0){
+        if (r > 998){
             //Send clock message to Jevois
             time_t time = system_clock::to_time_t(now);
             tm utc_time = *gmtime(&time);
-            string months   = to_string(utc_time.tm_mon);
+            string months   = to_string(utc_time.tm_mon+1);
             string days     = to_string(utc_time.tm_mday);
             string hours    = to_string(utc_time.tm_hour);
             string mins     = to_string(utc_time.tm_min);
-            string years    = to_string(utc_time.tm_year - 100);
+            string years    = to_string(utc_time.tm_year + 1900);
             string secs     = to_string(utc_time.tm_sec);
-            string stime = "date " + months + days + hours + mins + years + "." + secs;
+
+            string stime = "date " + string(2 - months.length(), '0') + months + string(2 - days.length(), '0') + days
+                    + string(2 - months.length(), '0') + hours + string(2 - mins.length(), '0') + mins
+                    + years + "." + string(2 - secs.length(), '0') + secs;
             this->write_messages(stime);
             time_set = true;
+            read_messages();
+            time_point<high_resolution_clock> time2 = high_resolution_clock::now();
+            deltaT = duration_cast<duration<int,std::micro>>(time2 - now).count();
+            std::cout << deltaT << std::endl;
+            usleep(1000000);
             return true;
         }else{
             time_point<high_resolution_clock> time2 = high_resolution_clock::now();
@@ -89,10 +98,33 @@ bool rwJevois::setJevoisClock()
 }
 
 
+int rwJevois::write_messages(const std::string &msg, std::chrono::time_point<std::chrono::system_clock> prevT)
+{
+    // write message to serial port
+    int len = serial_port->write_msg(msg);
+    auto now = std::chrono::system_clock::now();
+    auto deltaT = std::chrono::duration_cast<std::chrono::duration<int,std::micro>>(now - prevT).count();
+
+    if(len > 1){
+        std::cout << "\nSENT: [   " << msg << "   ] with delay: " << deltaT << " micro s";
+    }
+
+    // update counters
+    write_count ++;
+
+    // Number of bites written
+    return len;
+}
+
 int rwJevois::write_messages(const std::string &msg)
 {
     // write message to serial port
     int len = serial_port->write_msg(msg);
+
+
+    if(len > 1){
+        std::cout << "\nSENT: [   " << msg << "   ]";
+    }
 
     // update counters
     write_count ++;
@@ -117,7 +149,7 @@ void rwJevois::read_messages(std::string &full_msg)
             fprintf(stderr,"\nMessage length exceeds BUFFLEN %i",BUFFLEN);
             return;
         }else if(full_msg.size() > 1 && received_all){
-            //std::cout << "\n" << full_msg << std::endl;
+            std::cout << "\nRECEIVED: [   " << full_msg << "   ]";
             return;
         }
     }
@@ -139,10 +171,11 @@ void rwJevois::read_messages()
             fprintf(stderr,"\nMessage length exceeds BUFFLEN %i",BUFFLEN);
             return;
         }else if(full_msg.size() > 1 && received_all){
-            std::cout << "\n" << full_msg << std::endl;
+            std::cout << "\nRECEIVED: [   " << full_msg << "   ]";
             return;
         }
     }
+    std::cout << "\nRECEIVED: [   " << full_msg << "   ]";
 }
 
 
@@ -206,6 +239,18 @@ void rwJevois::readMsg()
                             case JEVOISMSGID:
                                 memcpy(&tempHarrisMsg, (char *)bf, msgBytes);
                                 bufFree = harrisMsgBuf.push(tempHarrisMsg);
+
+                                // Time msg was parsed
+                                using namespace std::chrono;
+                                milliseconds time_ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
+                                std::cout << time_ms.count() << std::endl;
+
+                                std::cout << tempHarrisMsg.time << "," << tempHarrisMsg.imageWidth << "," << tempHarrisMsg.imageHeight;
+                                for (int b = 0; b < sizeof(tempHarrisMsg.fpVal)/sizeof(tempHarrisMsg.fpVal[0]); b++){
+                                    std::cout << ",(" << tempHarrisMsg.fpVal[b] << "," << tempHarrisMsg.fpCoord[b][0] << "," << tempHarrisMsg.fpCoord[b][1] << ")";
+                                }
+                                std::cout << "\n" << std::endl;
+
                                 write_count++;
                         }
                     }
@@ -250,12 +295,14 @@ void rwJevois::start()
 
 void rwJevois::stop()
 {
-    std::cout << "\nCLOSING THREADS" << std::endl;
+    std::cout << "\nCLOSING CAM READ THREADS AND RESTARTING CAMERA";
 
     //Signal exit
     time_to_exit = true;
 
     write_messages("streamoff\0");
+    usleep(100000);
+    write_messages("restart\0");
     usleep(100000);
 
     if(reading_status){
@@ -269,7 +316,7 @@ void rwJevois::stop()
 // -------------------------------------------------------------------
 //   Quit Handler
 // -------------------------------------------------------------------
-void rwJevois::handle_quit(int sig)
+void rwJevois::handle_quit()
 {
     try{
         stop();

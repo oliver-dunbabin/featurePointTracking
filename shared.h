@@ -38,8 +38,7 @@ using namespace constants;
 typedef std::chrono::high_resolution_clock Clock;
 
 struct camMessage{
-    unsigned long time_stmpI;               // Jevois program time for grabbing frame
-    unsigned long time_stmpF;               // Jevois program execution time
+    unsigned long time_stmp;                // Jevois program time for grabbing frame
     unsigned int imgWidth;                  // Sensor horizontal resolution
     unsigned int imgHeight;                 // Sensor vertical resolution
     double fpLocNorm[MAXFPS][NUMFPMEAS];    // image plane location of feature points (x * y)
