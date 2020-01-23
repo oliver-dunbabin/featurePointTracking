@@ -1,4 +1,5 @@
 #include "t265_connect.h"
+#include <unistd.h>
 
 T265_Connect::T265_Connect(std::string orientation)
 {
@@ -26,17 +27,24 @@ T265_Connect::T265_Connect()
 
 bool T265_Connect::getData(vehicleState *X)
 {
+    bool status;
     mu.lock();
-    X->timestamp = pose_data.timestamp;
-    X->pos.X     = pose_data.pos.X;
-    X->pos.Y     = pose_data.pos.Y;
-    X->pos.Z     = pose_data.pos.Z;
-    X->quat.Q0   = pose_data.quat.Q0;
-    X->quat.Q1   = pose_data.quat.Q1;
-    X->quat.Q2   = pose_data.quat.Q2;
-    X->quat.Q3   = pose_data.quat.Q3;
+    if(!std::isfinite(pose_data.quat.Q0) || !std::isfinite(pose_data.quat.Q1) || !std::isfinite(pose_data.quat.Q2) || !std::isfinite(pose_data.quat.Q3) ||
+            !std::isfinite(pose_data.pos.X) || !std::isfinite(pose_data.pos.Y) || !std::isfinite(pose_data.pos.Z)){
+        status = false;
+    }else{
+        X->timestamp = pose_data.timestamp;
+        X->pos.X     = pose_data.pos.X;
+        X->pos.Y     = pose_data.pos.Y;
+        X->pos.Z     = pose_data.pos.Z;
+        X->quat.Q0   = pose_data.quat.Q0;
+        X->quat.Q1   = pose_data.quat.Q1;
+        X->quat.Q2   = pose_data.quat.Q2;
+        X->quat.Q3   = pose_data.quat.Q3;
+        status = true;
+    }
     mu.unlock();
-    return true;
+    return status;
 }
 
 
@@ -52,6 +60,7 @@ void T265_Connect::setData(vehicleState *X)
     pose_data.quat.Q2   = X->quat.Q2;
     pose_data.quat.Q3   = X->quat.Q3;
     mu.unlock();
+
 }
 
 
@@ -59,16 +68,17 @@ void T265_Connect::read_RS()
 {
     if (read_status)
     {
-        fprintf(stderr,"read thread already running");
+        fprintf(stderr,"RS: read thread already running");
     }else
     {
         pipe.start(cfg);
-
+        read_status = true;
         while(read_status){
 
             vehicleState pose;
             readPose(&pose);
             setData(&pose);
+            //usleep(1000);
         }
     }
 }
@@ -77,10 +87,7 @@ void T265_Connect::read_RS()
 void T265_Connect::startThread()
 {
     if(!read_status){
-
-        read_status = true;
         readThread = std::thread(&T265_Connect::read_RS, this);
-
     }
 }
 
@@ -109,20 +116,20 @@ void T265_Connect::readPose(vehicleState *pose)
         auto f = frames.first_or_default(RS2_STREAM_POSE);
         // Cast the frame to pose_frame and get its data
         /*if (rs2::pose_frame fp = frames.as<rs2::pose_frame>()) {*/
-        auto pose_data = f.as<rs2::pose_frame>().get_pose_data();
+        auto rs_data = f.as<rs2::pose_frame>().get_pose_data();
 
-        double camX = pose_data.translation.x;
-        double camY = pose_data.translation.y;
-        double camZ = pose_data.translation.z;
+        double camX = rs_data.translation.x;
+        double camY = rs_data.translation.y;
+        double camZ = rs_data.translation.z;
 
         rs2_time_t frame_time = f.get_timestamp();
         pose->timestamp = static_cast<uint64_t>(frame_time+0.5);
 
         double q[4];
-        q[0] = pose_data.rotation.w;
-        q[1] = pose_data.rotation.x;
-        q[2] = pose_data.rotation.y;
-        q[3] = pose_data.rotation.z;
+        q[0] = rs_data.rotation.w;
+        q[1] = rs_data.rotation.x;
+        q[2] = rs_data.rotation.y;
+        q[3] = rs_data.rotation.z;
 
         double X[3];
         X[0] = camX;

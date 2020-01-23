@@ -10,19 +10,19 @@ unsigned char calculateCheckSum(unsigned char *buf, int byteCount, int index){
     return csum;
 }
 
-rwJevois::rwJevois(JevoisSerialPort *serial_port_)
+rwJevois::rwJevois(JevoisSerialPort *serial_port_):harrisMsgBuf(CBUFLEN)
 {
     //assign serial port object passed into class
     serial_port = serial_port_;
-    usleep(10000);
+    usleep(1000);
     //initialise counters
     init_counters();
 }
 
 
-rwJevois::rwJevois() : serial_port()
+rwJevois::rwJevois() : harrisMsgBuf(CBUFLEN),serial_port()
 {
-    usleep(10000);
+    usleep(1000);
     init_counters();
 }
 
@@ -85,7 +85,7 @@ bool rwJevois::setJevoisClock()
             read_messages();
             time_point<high_resolution_clock> time2 = high_resolution_clock::now();
             deltaT = duration_cast<duration<int,std::micro>>(time2 - now).count();
-            std::cout << deltaT << std::endl;
+            std::cout << "\n" << deltaT << std::endl;
             usleep(1000);
             return true;
         }else{
@@ -232,26 +232,19 @@ void rwJevois::readMsg()
                     csum = calculateCheckSum((unsigned char *)bfPayload, payloadBytes, 0);
 
                     // verify message passes checksum
-                    if (msgCsum == csum){
+                    if (true){//(msgCsum == csum){
 
                         // Check message is from Jevois
                         switch (tempHarrisMsg.harrisHeader.messageID){
                             case JEVOISMSGID:
                                 memcpy(&tempHarrisMsg, (char *)bf, msgBytes);
                                 bufFree = harrisMsgBuf.push(tempHarrisMsg);
+                                write_count++;
 
                                 // Time msg was parsed
                                 using namespace std::chrono;
                                 milliseconds time_ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
-                                std::cout << time_ms.count() << std::endl;
-
-                                std::cout << tempHarrisMsg.time << "," << tempHarrisMsg.imageWidth << "," << tempHarrisMsg.imageHeight;
-                                for (int b = 0; b < sizeof(tempHarrisMsg.fpVal)/sizeof(tempHarrisMsg.fpVal[0]); b++){
-                                    std::cout << ",(" << tempHarrisMsg.fpVal[b] << "," << tempHarrisMsg.fpCoord[b][0] << "," << tempHarrisMsg.fpCoord[b][1] << ")";
-                                }
-                                std::cout << "\n" << std::endl;
-
-                                write_count++;
+                                //dispPreview(tempHarrisMsg, time_ms);
                         }
                     }
                     index += msgBytes;
@@ -268,6 +261,16 @@ void rwJevois::readMsg()
     serial_port->clear_port(index);
 }
 
+
+void rwJevois::dispPreview(const harrisMessageFP msg, std::chrono::milliseconds t)
+{
+    std::cout << "\t " << t.count();
+    std::cout << "\n" << write_count << "\t:" << msg.time << "," << (double)msg.sendT/1000 << "," << msg.imageWidth << "," << msg.imageHeight;
+    for (int b = 0; b < 10; b++){
+        std::cout << ",(" << msg.fpVal[b] << "," << msg.fpCoord[b][0] << "," << msg.fpCoord[b][1] << ")";
+    }
+    std::cout << "\n" << std::endl;
+}
 
 
 void rwJevois::start()
@@ -306,6 +309,7 @@ void rwJevois::stop()
     usleep(100000);
 
     if(reading_status){
+        reading_status = false;
         if(readThread.joinable()){
             readThread.join();
         }
@@ -329,7 +333,7 @@ void rwJevois::handle_quit()
 void rwJevois::read_thread()
 {
     if(reading_status){
-        fprintf(stderr,"\nRead thread already running");
+        fprintf(stderr,"\nCAM: Read thread already running");
         return;
     }else{
         reading_status = true;
@@ -337,7 +341,6 @@ void rwJevois::read_thread()
         while(!time_to_exit)
         {
             readMsg();
-            usleep(1000);
         }
         reading_status = false;
         return;

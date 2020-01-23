@@ -97,6 +97,35 @@ void Onboard::testCamera()
     handle_quit();
 }
 
+
+void Onboard::testSensors()
+{
+
+    sPort->start();
+
+    bool clock_set = camera->setJevoisClock();
+
+    camera->start();
+
+    t265.startThread();
+
+    data.fpTimeI = data.timer.now();
+
+    if (clock_set){
+        while(!time_to_exit){
+
+            sensorUpdate();
+
+            usleep(10000);
+        }
+    }else{
+        perror("Could not synchronise JEVOIS and HOST clocks");
+    }
+
+    handle_quit();
+}
+
+
 bool Onboard::camUpdate()
 {
     harrisMessageFP sensorMsg;
@@ -109,13 +138,12 @@ bool Onboard::camUpdate()
         fpMsg.imgHeight     = sensorMsg.imageHeight;
         fpMsg.imgWidth      = sensorMsg.imageWidth;
 
-        camString += std::to_string(sensorMsg.time);
+        camString += std::to_string(sensorMsg.time) + "," + std::to_string(sensorMsg.sendT);
 
         int j = 0;
         for(int i = 0; i < constants::MAXFPS; i++){
 
             camString += "," + std::to_string(sensorMsg.fpVal[i]) + "," + std::to_string(sensorMsg.fpCoord[i][0]) + "," + std::to_string(sensorMsg.fpCoord[i][1]);
-
             if(sensorMsg.fpVal[i] > constants::harrisValThresh){
                 double fpLocRow = (sensorMsg.fpCoord[i][1] - 0.5*(double)fpMsg.imgHeight)/(0.5*(double)fpMsg.imgHeight)*constants::IMAGESIZEV/((double)constants::IMAGESIZEH);
                 double fpLocCol = (sensorMsg.fpCoord[i][0] - 0.5*((double)fpMsg.imgWidth))/(0.5*(double)fpMsg.imgWidth)*constants::IMAGESIZEH/((double)constants::IMAGESIZEH);
@@ -124,7 +152,7 @@ bool Onboard::camUpdate()
                 j++;
             }
         }
-
+        std::cout << "\n" << camString << "\n";
         if(log_data){
             fpMeasFile->saveData(camString);
             logEstimates();
@@ -142,14 +170,16 @@ bool Onboard::camUpdate()
 
 bool Onboard::vehicleUpdate()
 {
-    vehicleState *vEst    = data.getVState();
-    bool msgGrab = t265.getData(vEst);
+    vehicleState vEst;
+    bool msgGrab = t265.getData(&vEst);
+
     if (msgGrab){
-        data.setVehicleState(vEst);
+        data.setVehicleState(&vEst);
+        std::string posedata;
+        posedata += std::to_string(vEst.timestamp) + "," + std::to_string(vEst.pos.X) + "," + std::to_string(vEst.pos.Y) + "," + std::to_string(vEst.pos.Z) + ","
+                + std::to_string(vEst.quat.Q0) + "," + std::to_string(vEst.quat.Q1) + "," + std::to_string(vEst.quat.Q2) + "," + std::to_string(vEst.quat.Q3);
+        std::cout << "\n" << posedata << std::endl;;
         if(log_data){
-            std::string posedata;
-            posedata += std::to_string(vEst->timestamp) + "," + std::to_string(vEst->pos.X) + "," + std::to_string(vEst->pos.Y) + "," + std::to_string(vEst->pos.Z)
-                    + std::to_string(vEst->quat.Q0) + "," + std::to_string(vEst->quat.Q1) + "," + std::to_string(vEst->quat.Q2) + "," + std::to_string(vEst->quat.Q3);
             PoseFile->saveData(posedata);
         }
     }

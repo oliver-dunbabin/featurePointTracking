@@ -21,6 +21,8 @@ public:
 
     void stopOnboard();
 
+    void testSensors();
+
     void testCamera();
 
 private:

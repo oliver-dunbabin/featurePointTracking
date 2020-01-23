@@ -16,6 +16,7 @@
 #define SERIAL_SEEK_DATA 4
 #define NUMCORNERS 100
 #define NUMPERBIN 1
+#define CBUFLEN 20
 
 // Message format
 struct msg_header {
@@ -31,7 +32,8 @@ struct harrisMessageFP {
                         harrisHeader.sync2 = SERIAL_SYNC2;
                         harrisHeader.messageID = JEVOISMSGID;}
     msg_header harrisHeader;
-    uint64_t time;                                     // Time frame was grabbed (since epoch)
+    uint64_t time;                                      // Time frame was grabbed (since epoch)
+    uint32_t sendT;                                     // Time between grab image and send message
     uint16_t imageWidth;                                // Width of input frame
     uint16_t imageHeight;                               // Height of input frame
     uint16_t fpCoord[NUMCORNERS*NUMPERBIN][2];          // Harris feature point coordinate (col * row)
@@ -82,6 +84,8 @@ private:
     void readMsg();
 
     void read_thread();
+
+    void dispPreview(const harrisMessageFP msg, std::chrono::milliseconds t);
 
 };
 

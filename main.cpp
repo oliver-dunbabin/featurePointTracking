@@ -19,8 +19,8 @@ int main()
     onboard_quit = &onboard;
 
     //onboard.updateOnboard();
-    onboard.testCamera();
-
+    onboard.testSensors();
+    //onboard.testCamera();
 
     return 0;
 }

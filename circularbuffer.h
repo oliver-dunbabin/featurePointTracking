@@ -34,11 +34,11 @@ private:
 
 public:
 
-    CircularBuffer(){
+    /*CircularBuffer(){
         maxLen = 1;
         data.resize(maxLen);
         n = 0; f = 0; b = 0;
-    }
+    }*/
 
     CircularBuffer(int l){
         if (l > 1){

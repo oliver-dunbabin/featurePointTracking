@@ -7,7 +7,7 @@
 namespace constants {
     const double RHO = 0.5;                 // inverse depth initialisation (1/m)
     const int DBSIZE = 100;                 // Max number of features to track
-    const int MAXFPS = 150;                 // Max number of fps from camera
+    const int MAXFPS = 100;                 // Max number of fps from camera
     const int harrisValThresh = 50;         // Harris value threshold
     const int NUMFPSTATES = 6;              // Number of states per feature point
     const int NUMVSTATES = 7;               // Number of vehicle states

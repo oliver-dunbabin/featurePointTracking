@@ -59,6 +59,7 @@ void initDataStructs(shared *data)
 
 void updateMappingFP(shared *data)
 {
+    vehicleState *vEst = data->getVState();
     // Update process model
     data->fpTimeF = data->timer.now();
     std::chrono::duration<double> dt = std::chrono::duration_cast<std::chrono::duration<double>>(data->fpTimeF-data->fpTimeI);
@@ -66,7 +67,7 @@ void updateMappingFP(shared *data)
     data->fpTimeI = data->timer.now();
 
     // Update measurement model
-    if(data->gotCAMmsg){
+    if((data->gotCAMmsg) && (vEst != nullptr)){
 
         doCorrespondance(false, data);
         updateFPmeas(data);
