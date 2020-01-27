@@ -4,6 +4,7 @@
 #include <math.h>
 #include <algorithm>
 #include <string.h>
+#include <vector>
 
 bool sortDescending(const std::pair<int,int> &a,const std::pair<int,int> &b)
 {
@@ -39,8 +40,8 @@ void map_vector( double T[3][3], double vin[3], double vout[3] ) {
 
 void initDataStructs(shared *data)
 {
-    fpDatabase *fpEst = data->getFpStates();
-    camMessage *fpMeas = data->getCamMsg();
+    fpDatabase *fpEst   = data->getFpStates();
+    camMessage *fpMeas  = data->getCamMsg();
     if(!fpEst->dbInit){
         fpEst->confThresh = 50;
         fpEst->dbInit = false;
@@ -57,7 +58,7 @@ void initDataStructs(shared *data)
 }
 
 
-void updateMappingFP(shared *data)
+bool updateMappingFP(shared *data)
 {
     vehicleState *vEst = data->getVState();
     // Update process model
@@ -71,7 +72,29 @@ void updateMappingFP(shared *data)
 
         doCorrespondance(false, data);
         updateFPmeas(data);
+        updatefpDatalink(data);
+        return true;
+    }
+    return false;
+}
 
+
+void updatefpDatalink(shared *data)
+{
+    fpDatabase *fpEst   = data->getFpStates();
+    fpDatalink *fpData  = data->getFpData();
+
+    fpData->numCorresponded = fpEst->numCorresponded;
+    fpData->confThreash     = fpEst->confThresh;
+    for(int i = 0; i < DBSIZE; i++){
+        fpData->confidence[i]   = fpEst->confidence[i];
+        fpData->fpID[i]         = fpEst->fpID[i];
+        for(int j = 0; j < NUMFPSTATES; j++){
+            fpData->state[i][j] = fpEst->state[i][j];
+            for(int k = 0; k < NUMFPSTATES; k++){
+                fpData->fpP[i][j][k] = fpEst->fpP[i][j][k];
+            }
+        }
     }
 }
 
@@ -123,12 +146,13 @@ void updateFPmeas(shared *data)
                     double cam2fpIN[3];
                     map_vector(Lc2i,cam2fpCAM,cam2fpIN);
 
-                    fpEst->state[j][3] = atan2(cam2fpIN[1],cam2fpIN[0]); /* psi */
-                    fpEst->state[j][4] = atan2(-cam2fpIN[2],sqrt(SQ(cam2fpIN[0])+SQ(cam2fpIN[1]))); /* theta */ //asin(-1.*cam2fpIN[2]); //
+                    fpEst->state[j][3]  = atan2(cam2fpIN[1],cam2fpIN[0]); /* psi */
+                    fpEst->state[j][4]  = atan2(-cam2fpIN[2],sqrt(SQ(cam2fpIN[0])+SQ(cam2fpIN[1]))); /* theta */ //asin(-1.*cam2fpIN[2]); //
 
-                    // Initialise state estimate covariance matrix for new fp
-                    for(int k = 0; k < 3; k++)
+                   // Initialise state estimate covariance matrix for new fp
+                    for(int k = 0; k < 3; k++){
                         fpEst->fpP[j][k][k] = SQ(SIGMAPOS);
+                    }
                     fpEst->fpP[j][3][3] = SQ(SIGMAFPANG);
                     fpEst->fpP[j][4][4] = SQ(SIGMAFPANG);
                     fpEst->fpP[j][5][5] = SQ(SIGMAFPINVD);
@@ -139,102 +163,231 @@ void updateFPmeas(shared *data)
                 }
             }
         } else{
-            // Find the position vector of fp wrt to camera, hcam (in camera frame)
             int n = fpMeas->assign_fp[i];
-            double hcam[3], hin[3];
-            double psi   = fpEst->state[n][3];
-            double theta = fpEst->state[n][4];
-            double rho   = fpEst->state[n][5];
-            double px    = fpEst->state[n][0];
-            double py    = fpEst->state[n][1];
-            double pz    = fpEst->state[n][2];
-            double m[3];
-            double stheta   = sin(theta);
-            double ctheta   = cos(theta);
-            double spsi     = sin(psi);
-            double cpsi     = cos(psi);
-            // Unit vector from anchor point to feature point (local coordinate system)
-            m[0] =  cpsi*ctheta;    //cos(psi)*cos(theta);
-            m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
-            m[2] = -stheta;         //-sin(theta);
-            // Unit vector from vehicle location to feature point (local coordinate system)
-            hin[0] = rho*(px - vehicleEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
-            hin[1] = rho*(py - vehicleEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
-            hin[2] = rho*(pz - vehicleEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
-            // Unit vector from vehicle location to feature point (camera frame)
-            hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
-            hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
-            hcam[2] = Li2c[2][0]*hin[0] + Li2c[2][1]*hin[1] + Li2c[2][2]*hin[2];
+            switch (data->filter_type) {
+            case UKF:
+            {
+                double SigPoints[NUMFPSTATES][2*NUMFPSTATES];
+                std::vector<std::vector<double>> SigMeas;
+                std::vector<std::vector<double>> sigPoints;
+                double predMeas[2] = {0};
+                int skip = 0;
+                findSigmaPoints(n, fpEst, SigPoints);
 
-            // Make sure not finding singularity
-            if (hcam[0] > 0.01){
-                // Compute estimated pixel location of fp
-                double fpPixEst[2];
-                fpPixEst[0] = focallengthx*hcam[1]/hcam[0];
-                fpPixEst[1] = focallengthy*hcam[2]/hcam[0];
+                // Push each sigma point through measurement equation
+                for(int k = 0; k < 2*NUMFPSTATES; k++){
+                    double hcam[3], hin[3];
+                    double psi   = SigPoints[3][k];
+                    double theta = SigPoints[4][k];
+                    double rho   = SigPoints[5][k];
+                    double px    = SigPoints[0][k];
+                    double py    = SigPoints[1][k];
+                    double pz    = SigPoints[2][k];
+                    double m[3];
+                    double stheta   = sin(theta);
+                    double ctheta   = cos(theta);
+                    double spsi     = sin(psi);
+                    double cpsi     = cos(psi);
 
-                // ensure predicted fp location lies on the camera sensor
-                if ((fpPixEst[0] > -1) && (fpPixEst[0] < 1) &&
-                    (fpPixEst[1] > -(double)IMAGESIZEV/IMAGESIZEH) &&
-                    (fpPixEst[1] < (double)IMAGESIZEV/IMAGESIZEH)){
+                    // Unit vector from anchor point to feature point (local coordinate system)
+                    m[0] =  cpsi*ctheta;    //cos(psi)*cos(theta);
+                    m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
+                    m[2] = -stheta;         //-sin(theta);
+                    // Unit vector from vehicle location to feature point (local coordinate system)
+                    hin[0] = rho*(px - vehicleEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
+                    hin[1] = rho*(py - vehicleEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
+                    hin[2] = rho*(pz - vehicleEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
+                    // Unit vector from vehicle location to feature point (camera frame)
+                    hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
+                    hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
+                    hcam[2] = Li2c[2][0]*hin[0] + Li2c[2][1]*hin[1] + Li2c[2][2]*hin[2];
 
-                    // Calculate residual (difference between measured and estimated fp location)
-                    double residual[2][1];
-                    residual[0][0] = fpMeas->fpLocNorm[i][0] - fpPixEst[0];
-                    residual[1][0] = fpMeas->fpLocNorm[i][1] - fpPixEst[1];;
+                    // Make sure not finding singularity
+                    if (hcam[0] > 0.01){
+                        // Compute estimated pixel location of fp
+                        std::vector<double> meas{ (focallengthx*hcam[1]/hcam[0]), (focallengthy*hcam[2]/hcam[0]) };
+                        std::vector<double> state{ px, py, pz, psi, theta, rho };
+                        SigMeas.push_back(meas);
+                        sigPoints.push_back(state);
+                        predMeas[0] += meas.at(0);
+                        predMeas[1] += meas.at(1);
+                    }
+                }
+                // Get mean of these sigma measurement results to give predicted measurement
+                double l = SigMeas.size();
+                predMeas[0] /= l;
+                predMeas[1] /= l;
 
-                    // Populate measurement Jacobian fp matrix, Cfp
-                    double Cfp[NUMFPMEAS][NUMFPSTATES];
-                    double foclen[2] = {focallengthx, focallengthy};
-                    ComputeCinvD(n, hcam, foclen, Cfp, data);
 
-                    // Determine the kalman gain, and update the states/ covariance
-                    // build the matrix Rt = (Cfp*fpP*Cfp' + R)
-                    double CfpP[NUMFPMEAS][NUMFPSTATES], CfpPCt[NUMFPMEAS][NUMFPMEAS], Rt[NUMFPMEAS][NUMFPMEAS];
-                    mat_mult((double *)Cfp, NUMFPMEAS, NUMFPSTATES,(double *)fpEst->fpP[n], NUMFPSTATES,NUMFPSTATES,(double *)CfpP);
-                    mat_mult_T((double *)CfpP,NUMFPMEAS,NUMFPSTATES, (double *)Cfp,NUMFPMEAS,NUMFPSTATES, (double *)CfpPCt);
+                if ((predMeas[0] > -1) && (predMeas[0] < 1) &&            // ensure predicted fp location lies on the camera sensor
+                    (predMeas[1] > -(double)IMAGESIZEV/IMAGESIZEH) &&
+                    (predMeas[1] < (double)IMAGESIZEV/IMAGESIZEH)){
 
-                    int j,k;
-                    for (j=0;j<NUMFPMEAS;j++){
-                        for(k=0;k<NUMFPMEAS;k++){
-                            Rt[j][k] = CfpPCt[j][k] + data->fpR[j][k];
+                    // Calculate covariance of predicted measurement and cross
+                    // covariance with state estimate
+                    double psi   = fpEst->state[n][3];
+                    double theta = fpEst->state[n][4];
+                    double rho   = fpEst->state[n][5];
+                    double px    = fpEst->state[n][0];
+                    double py    = fpEst->state[n][1];
+                    double pz    = fpEst->state[n][2];
+                    double Py[2][2] = {0};
+                    double Pxy[NUMFPSTATES][NUMFPSTATES] = {0};
+                    for(uint k = 0; k < SigMeas.size(); k++){
+                        double E_y[2][2], E_x[NUMFPSTATES][2];
+                        double in_y[2] = {(SigMeas[k][0] - predMeas[0]),
+                                          (SigMeas[k][1] - predMeas[1])};
+                        double in_x[NUMFPSTATES] = {(sigPoints[k][0] - px),
+                                                    (sigPoints[k][1] - py),
+                                                    (sigPoints[k][2] - pz),
+                                                    (sigPoints[k][3] - psi),
+                                                    (sigPoints[k][4] - theta),
+                                                    (sigPoints[k][5] - rho)};
+                        mat_mult_T(in_y, 2, 1, in_y, 2, 1, (double *)E_y);
+                        mat_mult_T(in_x, NUMFPSTATES, 1, in_y, 2, 1, (double *)E_x);
+                        Py[0][0]    += E_y[0][0]/l; Py[0][1]  += E_y[0][1]/l;
+                        Py[1][0]    += E_y[1][0]/l; Py[1][0]  += E_y[1][0]/l;
+                        Pxy[0][0]   += E_x[0][0]/l; Pxy[0][1] += E_x[0][1]/l;
+                        Pxy[1][0]   += E_x[1][0]/l; Pxy[1][1] += E_x[1][1]/l;
+                        Pxy[2][0]   += E_x[2][0]/l; Pxy[2][1] += E_x[2][1]/l;
+                        Pxy[3][0]   += E_x[3][0]/l; Pxy[3][1] += E_x[3][1]/l;
+                        Pxy[4][0]   += E_x[4][0]/l; Pxy[4][1] += E_x[4][1]/l;
+                        Pxy[5][0]   += E_x[5][0]/l; Pxy[5][1] += E_x[5][1]/l;
+                    }
+                    for (int j = 0; j < NUMFPMEAS; j++){
+                        for(int k = 0; k < NUMFPMEAS; k++){
+                            Py[j][k] += data->fpR[j][k];
                         }
                     }
 
-                    /* Kalman gain: K = fpP*Cfp'*inv(Cfp*fpP*Cfp' + R)  */
-                    double RtInv[NUMFPMEAS][NUMFPMEAS];
+                    // Calculate the Kalman gain for the UKF
                     double Kgainfp[NUMFPSTATES][NUMFPMEAS];
-                    mat_invert((double *)Rt,NUMFPMEAS,(double *)RtInv);
-                    //mat_mult_T((double *)fpP[n],NUMFPSTATES,NUMFPSTATES,(double *)Cfp,NUMFPMEAS,NUMFPSTATES,(double *)fpPCt);
-                    //mat_mult((double *)fpPCt,NUMFPSTATES,NUMFPMEAS,(double *)RtInv,NUMFPMEAS,NUMFPMEAS,(double *)Kgainfp);
-                    mat_T_mult((double *)CfpP,NUMFPMEAS,NUMFPSTATES,(double *)RtInv,NUMFPMEAS,NUMFPMEAS,(double *)Kgainfp);
+                    double Py_inv[2][2];
+                    mat_invert((double *)Py, 2, (double *)Py_inv);
+                    mat_mult((double *)Pxy, NUMFPSTATES, 2, (double *)Py_inv, 2, 2, (double *)Kgainfp);
 
-                    // Update the feature point state vector
-                    double xcorr[NUMFPSTATES][1];
+                    // Get the residual (difference between measured and predicted measurements
+                    double residual[2];
+                    residual[0] = fpMeas->fpLocNorm[i][0] - predMeas[0];
+                    residual[1] = fpMeas->fpLocNorm[i][1] - predMeas[1];
+
+                    // Compute the new a posteriori state estimate
+                    double xcorr[NUMFPSTATES];
                     mat_mult((double *)Kgainfp,NUMFPSTATES,NUMFPMEAS,(double *)residual,2,1,(double *)xcorr);
-                    for(j=0;j<NUMFPSTATES;j++){
-                        fpEst->state[n][j] += xcorr[j][0];
-                        //residual[0] -= Cfp[0][j]*xcorr[j];
-                        //residual[1] -= Cfp[1][j]*xcorr[j];
+                    for(int j = 0; j < NUMFPSTATES; j++){
+                        fpEst->state[n][j] += xcorr[j];
                     }
 
-
-                    // Update lower left half fp covariance matrix: P = P - KCfpP
-                    double KfpCP[NUMFPSTATES][NUMFPSTATES];
-                    mat_mult((double *)Kgainfp,NUMFPSTATES,NUMFPMEAS,(double *)CfpP, NUMFPMEAS,NUMFPSTATES, (double *)KfpCP);
-                    for (j = 0; j<NUMFPSTATES;j++){
-                        for(k = 0; k<=j; k++)
-                            fpEst->fpP[n][j][k] -= KfpCP[j][k];
-                    }
-
-                    // Enforce symmetry of P
-                    for (j = 1; j<NUMFPSTATES; j++){
-                        for (k = 0; k<j; k++){
-                            fpEst->fpP[n][k][j] = fpEst->fpP[n][j][k];
+                    // Compute the new a posteriori covariance matrix and enforce symmetry
+                    double PyKt[2][NUMFPSTATES], KPyKt[NUMFPSTATES][NUMFPSTATES];
+                    mat_mult_T((double *)Py, 2, 2, (double *)Kgainfp, NUMFPSTATES, 2, (double *)PyKt);
+                    mat_mult((double *)Kgainfp, NUMFPSTATES, 2, (double *)PyKt, 2, NUMFPSTATES, (double *)KPyKt);
+                    for (int j = 0; j<NUMFPSTATES;j++){
+                        for(int k = 0; k<=j; k++){
+                            fpEst->fpP[n][j][k] -= KPyKt[j][k];
+                            if(j != k)
+                                fpEst->fpP[n][k][j] = fpEst->fpP[n][j][k];
                         }
                     }
                 }
+                break;
             }
+            case EKF:
+            default:
+            {
+                // Find the position vector of fp wrt to camera, hcam (in camera frame)
+                double hcam[3], hin[3];
+                double psi   = fpEst->state[n][3];
+                double theta = fpEst->state[n][4];
+                double rho   = fpEst->state[n][5];
+                double px    = fpEst->state[n][0];
+                double py    = fpEst->state[n][1];
+                double pz    = fpEst->state[n][2];
+                double m[3];
+                double stheta   = sin(theta);
+                double ctheta   = cos(theta);
+                double spsi     = sin(psi);
+                double cpsi     = cos(psi);
+                // Unit vector from anchor point to feature point (local coordinate system)
+                m[0] =  cpsi*ctheta;    //cos(psi)*cos(theta);
+                m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
+                m[2] = -stheta;         //-sin(theta);
+                // Unit vector from vehicle location to feature point (local coordinate system)
+                hin[0] = rho*(px - vehicleEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
+                hin[1] = rho*(py - vehicleEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
+                hin[2] = rho*(pz - vehicleEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
+                // Unit vector from vehicle location to feature point (camera frame)
+                hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
+                hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
+                hcam[2] = Li2c[2][0]*hin[0] + Li2c[2][1]*hin[1] + Li2c[2][2]*hin[2];
+
+                // Make sure not finding singularity
+                if (hcam[0] > 0.01){
+                    // Compute estimated pixel location of fp
+                    double fpPixEst[2];
+                    fpPixEst[0] = focallengthx*hcam[1]/hcam[0];
+                    fpPixEst[1] = focallengthy*hcam[2]/hcam[0];
+
+                    // ensure predicted fp location lies on the camera sensor
+                    if ((fpPixEst[0] > -1) && (fpPixEst[0] < 1) &&
+                        (fpPixEst[1] > -(double)IMAGESIZEV/IMAGESIZEH) &&
+                        (fpPixEst[1] < (double)IMAGESIZEV/IMAGESIZEH)){
+
+                        // Calculate residual (difference between measured and estimated fp location)
+                        double residual[2][1];
+                        residual[0][0] = fpMeas->fpLocNorm[i][0] - fpPixEst[0];
+                        residual[1][0] = fpMeas->fpLocNorm[i][1] - fpPixEst[1];
+                        // Populate measurement Jacobian fp matrix, Cfp
+                        double Cfp[NUMFPMEAS][NUMFPSTATES];
+                        double foclen[2] = {focallengthx, focallengthy};
+                        ComputeCinvD(n, hcam, foclen, Cfp, data);
+
+                        // Determine the kalman gain, and update the states/ covariance
+                        // build the matrix Rt = (Cfp*fpP*Cfp' + R)
+                        double CfpP[NUMFPMEAS][NUMFPSTATES], CfpPCt[NUMFPMEAS][NUMFPMEAS], Rt[NUMFPMEAS][NUMFPMEAS];
+                        mat_mult((double *)Cfp, NUMFPMEAS, NUMFPSTATES,(double *)fpEst->fpP[n], NUMFPSTATES,NUMFPSTATES,(double *)CfpP);
+                        mat_mult_T((double *)CfpP,NUMFPMEAS,NUMFPSTATES, (double *)Cfp,NUMFPMEAS,NUMFPSTATES, (double *)CfpPCt);
+
+                        int j,k;
+                        for (j=0;j<NUMFPMEAS;j++){
+                            for(k=0;k<NUMFPMEAS;k++){
+                                Rt[j][k] = CfpPCt[j][k] + data->fpR[j][k];
+                            }
+                        }
+
+                        /* Kalman gain: K = fpP*Cfp'*inv(Cfp*fpP*Cfp' + R)  */
+                        double RtInv[NUMFPMEAS][NUMFPMEAS];
+                        double Kgainfp[NUMFPSTATES][NUMFPMEAS];
+                        mat_invert((double *)Rt,NUMFPMEAS,(double *)RtInv);
+                        //mat_mult_T((double *)fpP[n],NUMFPSTATES,NUMFPSTATES,(double *)Cfp,NUMFPMEAS,NUMFPSTATES,(double *)fpPCt);
+                        //mat_mult((double *)fpPCt,NUMFPSTATES,NUMFPMEAS,(double *)RtInv,NUMFPMEAS,NUMFPMEAS,(double *)Kgainfp);
+                        mat_T_mult((double *)CfpP,NUMFPMEAS,NUMFPSTATES,(double *)RtInv,NUMFPMEAS,NUMFPMEAS,(double *)Kgainfp);
+
+                        // Update the feature point state vector
+                        double xcorr[NUMFPSTATES][1];
+                        mat_mult((double *)Kgainfp,NUMFPSTATES,NUMFPMEAS,(double *)residual,2,1,(double *)xcorr);
+                        for(j=0;j<NUMFPSTATES;j++){
+                            fpEst->state[n][j] += xcorr[j][0];
+                            //residual[0] -= Cfp[0][j]*xcorr[j];
+                            //residual[1] -= Cfp[1][j]*xcorr[j];
+                        }
+
+
+                        // Update lower left half fp covariance matrix: P = P - KCfpP and enforce symmetry
+                        double KfpCP[NUMFPSTATES][NUMFPSTATES];
+                        mat_mult((double *)Kgainfp,NUMFPSTATES,NUMFPMEAS,(double *)CfpP, NUMFPMEAS,NUMFPSTATES, (double *)KfpCP);
+                        for (j = 0; j<NUMFPSTATES;j++){
+                            for(k = 0; k<=j; k++){
+                                fpEst->fpP[n][j][k] -= KfpCP[j][k];
+                                if(j != k){
+                                    fpEst->fpP[n][k][j] = fpEst->fpP[n][j][k];
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            }}
         }
     }
     fpEst->dbInit = true;   // We have filled the DB at least once with sensor measurements
@@ -318,7 +471,7 @@ void pointCorrespondance(shared *data)
     double focallengthy = (double)IMAGESIZEV/(IMAGESIZEH*tan(FOVV/2.)); //1/tan(FOVV/2.);
 
     int i,j,k;
-    for (j=0; j<DBSIZE; j++){   // Estimated fp in database
+    for (j=0; j<DBSIZE; j++){       // Estimated fp in database
         if(fpEst->fpID[j] >= 0){    // Make sure DB feature has been initialised
             /*********************************************
              *  Project estimates to the image plane  ****
@@ -585,3 +738,50 @@ void ComputeCinvD(int j, double hcam[3], double focallength[2], double Cfp[NUMFP
     */
 }
 
+
+
+
+void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[NUMFPSTATES][2*NUMFPSTATES])
+{
+    double nP[NUMFPSTATES][NUMFPSTATES];
+    mat_scalar_mult((double*)fpEst->fpP[i], NUMFPSTATES, NUMFPSTATES, NUMFPSTATES, (double *)nP);
+    double U[NUMFPSTATES][NUMFPSTATES];
+    CholeskyDecomposition(nP, U);
+
+    for (int k = 0; k < NUMFPSTATES; k++){
+        for (int j = 0; j < NUMFPSTATES; j++){
+            SigPoints[j][k] = fpEst->state[i][j] + U[k][j];
+            SigPoints[j][k+NUMFPSTATES] = fpEst->state[i][j] - U[k][j];
+        }
+    }
+}
+
+
+/* Computes the Cholesky Decomposition U for a symmetric matrix P
+ * according to:
+ *  P = U^(T)*U
+ * P: Symmetric matrix
+ * U: Upper triangular decomposition of P
+*/
+void CholeskyDecomposition(double P[NUMFPSTATES][NUMFPSTATES], double U[NUMFPSTATES][NUMFPSTATES])
+{
+
+    for (int i = 0; i < NUMFPSTATES; i++){
+        double sum = 0;
+        for (int k = 0; k <i; k++){
+            sum += pow(U[k][i],2);
+        }
+        U[i][i] = sqrt(P[i][i] - sum);
+        for (int j = 0; j < NUMFPSTATES; j++){
+            if(j < i){
+                U[i][j] = 0;
+            }else if (j > i){
+                sum = 0;
+                for (int k = 0; k <i; k++){
+                    sum += U[k][j]*U[k][i];
+                }
+                U[i][j] = (P[i][j] - sum)/U[i][i];
+            }
+        }
+    }
+}

@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <chrono>
 
+#define EKF 0
+#define UKF 1
+
 namespace constants {
     const double RHO = 0.5;                 // inverse depth initialisation (1/m)
     const int DBSIZE = 100;                 // Max number of features to track
@@ -38,24 +41,37 @@ using namespace constants;
 typedef std::chrono::high_resolution_clock Clock;
 
 struct camMessage{
-    unsigned long time_stmp;                // Jevois program time for grabbing frame
-    unsigned int imgWidth;                  // Sensor horizontal resolution
-    unsigned int imgHeight;                 // Sensor vertical resolution
+    uint64_t time_stmp;                     // Jevois program time for grabbing frame
+    uint32_t sendT;                         // Time between grab image and send message
+    uint16_t imgWidth;                      // Sensor horizontal resolution
+    uint16_t imgHeight;                     // Sensor vertical resolution
     double fpLocNorm[MAXFPS][NUMFPMEAS];    // image plane location of feature points (x * y)
     int assign_fp[MAXFPS];                  // measurement corresponds to db member i
     int NUMFPS = 0;                         // Number of feature points extracted from frame
-};
+}__attribute__((packed));
+
 
 struct fpDatabase{
     double state [DBSIZE][NUMFPSTATES];
     double fpP[DBSIZE][NUMFPSTATES][NUMFPSTATES];
     int confidence[DBSIZE];                 // confidence in database fp estimate
     int confThresh;                         // confidence threshold level (initialised at 50)
-    bool dbInit = false;                    // has db been initialised?
     int fpID[DBSIZE];
     int newFpID;
     int numCorresponded;
-};
+    bool dbInit = false;                    // has db been initialised?
+}__attribute__((packed));
+
+
+struct fpDatalink{
+    float state [DBSIZE][NUMFPSTATES];
+    float fpP[DBSIZE][NUMFPSTATES][NUMFPSTATES];
+    int32_t fpID[DBSIZE];
+    int8_t confidence[DBSIZE];
+    int8_t confThreash;
+    uint8_t numCorresponded;
+}__attribute__((packed));
+
 
 struct localPos{
     double X;
@@ -83,6 +99,7 @@ private:
     vehicleState *ptrvState = nullptr;
     camMessage *ptrfpHarris = nullptr;
     fpDatabase *ptrfpStates = nullptr;
+    fpDatalink *ptrfpData   = nullptr;
 
 public:
     shared();
@@ -91,6 +108,7 @@ public:
     vehicleState *getVState(){return ptrvState;}
     camMessage *getCamMsg(){return ptrfpHarris;}
     fpDatabase *getFpStates(){return ptrfpStates;}
+    fpDatalink *getFpData(){return ptrfpData;}
     void setCamMsg(camMessage *fpMeas);
     void setVehicleState(vehicleState *vState);
     double Li2c[3][3];
@@ -98,6 +116,7 @@ public:
     double fpQ[NUMFPSTATES][NUMFPSTATES] = {0};
     bool gotCAMmsg;
     bool gotPOSEmsg;
+    int filter_type;
 
     Clock::time_point fpTimeI;
     Clock::time_point fpTimeF;

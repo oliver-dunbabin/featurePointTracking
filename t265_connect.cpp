@@ -1,7 +1,7 @@
 #include "t265_connect.h"
 #include <unistd.h>
 
-T265_Connect::T265_Connect(std::string orientation)
+T265_Connect::T265_Connect(std::string orientation):pose_dataBuf(poseBufLen)
 {
     // Add pose stream
     cfg.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
@@ -13,7 +13,7 @@ T265_Connect::T265_Connect(std::string orientation)
 }
 
 
-T265_Connect::T265_Connect()
+T265_Connect::T265_Connect():pose_dataBuf(poseBufLen)
 {
     // Add pose stream
     cfg.enable_stream(RS2_STREAM_POSE, RS2_FORMAT_6DOF);
@@ -27,8 +27,21 @@ T265_Connect::T265_Connect()
 
 bool T265_Connect::getData(vehicleState *X)
 {
-    bool status;
-    mu.lock();
+    bool status = false;
+    bool gotMsg = false;
+    vehicleState pose;
+    gotMsg = pose_dataBuf.pop(&pose);
+    if(gotMsg){
+        if(!std::isfinite(pose.quat.Q0) || !std::isfinite(pose.quat.Q1) || !std::isfinite(pose.quat.Q2) || !std::isfinite(pose.quat.Q3) ||
+                !std::isfinite(pose.pos.X) || !std::isfinite(pose.pos.Y) || !std::isfinite(pose.pos.Z)){
+            status = false;
+        }else{
+            *X = pose;
+            status = true;
+        }
+    }
+
+    /*mu.lock();
     if(!std::isfinite(pose_data.quat.Q0) || !std::isfinite(pose_data.quat.Q1) || !std::isfinite(pose_data.quat.Q2) || !std::isfinite(pose_data.quat.Q3) ||
             !std::isfinite(pose_data.pos.X) || !std::isfinite(pose_data.pos.Y) || !std::isfinite(pose_data.pos.Z)){
         status = false;
@@ -43,14 +56,23 @@ bool T265_Connect::getData(vehicleState *X)
         X->quat.Q3   = pose_data.quat.Q3;
         status = true;
     }
-    mu.unlock();
+    mu.unlock();*/
     return status;
 }
 
 
-void T265_Connect::setData(vehicleState *X)
+bool T265_Connect::setData(vehicleState *X)
 {
-    mu.lock();
+    vehicleState pose = *X;
+    if(!std::isfinite(pose.quat.Q0) || !std::isfinite(pose.quat.Q1) || !std::isfinite(pose.quat.Q2) || !std::isfinite(pose.quat.Q3) ||
+            !std::isfinite(pose.pos.X) || !std::isfinite(pose.pos.Y) || !std::isfinite(pose.pos.Z)){
+        return false;
+    }
+
+    pose_dataBuf.push(pose);
+    return true;
+
+    /*mu.lock();
     pose_data.timestamp = X->timestamp;
     pose_data.pos.X     = X->pos.X;
     pose_data.pos.Y     = X->pos.Y;
@@ -59,7 +81,7 @@ void T265_Connect::setData(vehicleState *X)
     pose_data.quat.Q1   = X->quat.Q1;
     pose_data.quat.Q2   = X->quat.Q2;
     pose_data.quat.Q3   = X->quat.Q3;
-    mu.unlock();
+    mu.unlock();*/
 
 }
 
@@ -144,7 +166,6 @@ void T265_Connect::readPose(vehicleState *pose)
         pose->quat.Q1    = corrq[1];
         pose->quat.Q2    = corrq[2];
         pose->quat.Q3    = corrq[3];
-
     }
 }
 

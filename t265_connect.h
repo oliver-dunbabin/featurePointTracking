@@ -12,6 +12,8 @@
 #include "coordinatetransform.h"
 #include <stdint.h>
 #include "shared.h"
+#include "circularbuffer.h"
+#define poseBufLen 100
 
 class T265_Connect
 {
@@ -30,7 +32,7 @@ public:
 
     bool getData(vehicleState *X);
 
-    void setData(vehicleState *X);
+    bool setData(vehicleState *X);
 
     void handle_quit();
 
@@ -44,7 +46,7 @@ private:
     // Create a configuration for configuring the pipeline with a non default profile
     rs2::config cfg;
 
-    vehicleState pose_data;
+    CircularBuffer<vehicleState> pose_dataBuf;
 
     std::string CamOrient;
 

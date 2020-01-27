@@ -17,9 +17,11 @@ void initDataStructs(shared *data);
 
 void updateMappingFP(std::istringstream &tokenMsg, shared &data);
 
-void updateMappingFP(shared *data);
+bool updateMappingFP(shared *data);
 
 void updateFPmeas(shared *data);
+
+void updatefpDatalink(shared *data);
 
 void pointCorrespondance(shared *data);
 
@@ -32,6 +34,10 @@ bool sortDescending(const std::pair<int,int> &a,const std::pair<int,int> &b);
 void updateFPcov(double dt, shared *data);
 
 void ComputeCinvD(int j, double hcam[], double focallength[], double Cfp[NUMFPMEAS][NUMFPSTATES], shared *data);
+
+void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[NUMFPSTATES][2*NUMFPSTATES]);
+
+void CholeskyDecomposition(double P[NUMFPSTATES][NUMFPSTATES], double U[NUMFPSTATES][NUMFPSTATES]);
 
 void doCorrespondance(bool sortConf, shared *data);
 
