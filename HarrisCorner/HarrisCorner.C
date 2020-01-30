@@ -4,7 +4,7 @@
 // California (USC), and iLab at USC. See http://iLab.usc.edu and http://jevois.org for information about this project.
 //
 // Jevois Sample module modified by Oliver Dunbabin. Property of Purl (Pennstate University Research Lab).
-//
+// HardLink test - Does it change inode?
 // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*! \file */
 
@@ -44,6 +44,7 @@ struct harrisMessageFP {
                         harrisHeader.messageID = JEVOISMSGID;}
     msg_header harrisHeader;
     uint64_t time;                                      // Time frame was grabbed (ms since epoch)
+    uint32_t sendT;                                     // Time between grab image and send message
     uint16_t imageWidth;                                // Width of input frame
     uint16_t imageHeight;                               // Height of input frame
     uint16_t fpCoord[NUMCORNERS*NUMPERBIN][2];          // Harris feature point coordinate (col * row)
@@ -124,8 +125,10 @@ class HarrisCorner : public jevois::Module,
       jevois::RawImage inimg = inframe.get();
 
       // Time frame was grabbed
-      chrono::milliseconds time_ms = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
-      harrisfp.time = time_ms.count();
+      chrono::time_point<std::chrono::system_clock> now = chrono::system_clock::now();
+      chrono::microseconds time_ms = chrono::duration_cast<chrono::microseconds>(now.time_since_epoch());
+      harrisfp.time = static_cast<uint64_t>(inimg.time_stmp.tv_sec)*1000000 +
+              static_cast<uint64_t>(inimg.time_stmp.tv_usec);//time_ms.count();
 
       harrisfp.imageHeight = inimg.height;
       harrisfp.imageWidth  = inimg.width;
@@ -195,6 +198,10 @@ class HarrisCorner : public jevois::Module,
       int byteCount         = harrisfp.harrisHeader.messageSize;
       int headerSize        = sizeof(struct msg_header);
       int index             = headerSize;
+      // Time frame was grabbed
+      chrono::time_point<std::chrono::system_clock> final = chrono::system_clock::now();
+      harrisfp.sendT = std::chrono::duration_cast<chrono::duration<uint32_t,std::micro>>(final - now).count();
+
       unsigned char csum    = calculateCheckSum((unsigned char *)&harrisfp, byteCount, index);
       harrisfp.harrisHeader.csum = csum;
       string harrismsg = encodeSerialMsg((char *)&harrisfp, byteCount);
@@ -215,8 +222,10 @@ class HarrisCorner : public jevois::Module,
       jevois::RawImage inimg = inframe.get();
 
       // Time frame was grabbed
-      chrono::milliseconds time_ms = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch());
-      harrisfp.time = time_ms.count();
+      chrono::time_point<std::chrono::system_clock> now = chrono::system_clock::now();
+      chrono::microseconds time_ms = chrono::duration_cast<chrono::microseconds>(now.time_since_epoch());
+      harrisfp.time = static_cast<uint64_t>(inimg.time_stmp.tv_sec)*1000000 +
+              static_cast<uint64_t>(inimg.time_stmp.tv_usec);//time_ms.count();
 
       harrisfp.imageHeight = inimg.height;
       harrisfp.imageWidth  = inimg.width;
@@ -302,6 +311,11 @@ class HarrisCorner : public jevois::Module,
       int byteCount         = harrisfp.harrisHeader.messageSize;
       int headerSize        = sizeof(struct msg_header);
       int index             = headerSize;
+
+      // Time frame was grabbed
+      chrono::time_point<std::chrono::system_clock> final = chrono::system_clock::now();
+      harrisfp.sendT = std::chrono::duration_cast<chrono::duration<uint32_t,std::micro>>(final - now).count();
+
       unsigned char csum    = calculateCheckSum((unsigned char *)&harrisfp, byteCount, index);
       harrisfp.harrisHeader.csum = csum;
       string harrismsg = encodeSerialMsg((char *)&harrisfp, byteCount);
