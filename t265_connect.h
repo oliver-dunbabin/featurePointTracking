@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include "shared.h"
 #include "circularbuffer.h"
+#include <atomic>
 #define poseBufLen 100
 
 class T265_Connect
@@ -36,6 +37,8 @@ public:
 
     void handle_quit();
 
+    std::atomic<bool> config_error;
+
 private:
     void read_RS();
 
@@ -51,11 +54,11 @@ private:
     std::string CamOrient;
 
     bool time_to_exit;
-    bool read_status;
 
     // Threading
     std::mutex mu;
     std::thread readThread;
+    bool read_status;
 
 };
 

@@ -35,10 +35,16 @@ void updateFPcov(double dt, shared *data);
 
 void ComputeCinvD(int j, double hcam[], double focallength[], double Cfp[NUMFPMEAS][NUMFPSTATES], shared *data);
 
-void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[NUMFPSTATES][2*NUMFPSTATES]);
+void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[2*NUMFPSTATES][NUMFPSTATES]);
 
 void CholeskyDecomposition(double P[NUMFPSTATES][NUMFPSTATES], double U[NUMFPSTATES][NUMFPSTATES]);
 
 void doCorrespondance(bool sortConf, shared *data);
+
+vehicleState time_delay_get(bool populate, uint64_t time, double dt, vehicleState *buffer, int bufferSize);
+
+void time_delay_fill(bool populate, vehicleState &element, vehicleState *buffer, int bufferSize);
+
+vehicleState interpolate_Vstate(double frac, const vehicleState& V1, const vehicleState& V2);
 
 #endif // FPMAPPINGPROC_H

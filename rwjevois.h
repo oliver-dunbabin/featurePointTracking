@@ -37,7 +37,7 @@ struct harrisMessageFP {
     uint16_t imageWidth;                                // Width of input frame
     uint16_t imageHeight;                               // Height of input frame
     uint16_t fpCoord[NUMCORNERS*NUMPERBIN][2];          // Harris feature point coordinate (col * row)
-    unsigned char fpVal[NUMCORNERS*NUMPERBIN];          // Harris feature point value
+    uint8_t fpVal[NUMCORNERS*NUMPERBIN];                // Harris feature point value
 }__attribute__((packed));
 
 // Checksum calculation

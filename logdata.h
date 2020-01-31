@@ -8,14 +8,15 @@
 #include <string.h>
 #include <string>
 
+#define READ 1
+#define WRITE 0
+
 class LogData
 {
 public:
-    LogData(char const *suffix, int bytesize, bool createName);
+    LogData(std::string parentdir, int operation);
 
-    ~LogData();
-
-    void createFilename(char const *suffix, int bytesize);
+    void createFilename(std::string parentdir);
 
     void saveData(std::string data);
 
@@ -23,16 +24,18 @@ public:
     void saveBinary(T *data, int bytesize)
     {
 
-        outfile = fopen(filename, "a");
+        outfile = fopen(filename.c_str(), "a");
         fwrite(data, bytesize, 1, outfile);
         fclose(outfile);
     }
+
+    const std::string getFilename(){return filename;}
 
     void close();
 
 private:
 
-    char *filename;
+    std::string filename;
 
     FILE* outfile = nullptr;
 

@@ -35,40 +35,38 @@ JevoisSerialPort::~JevoisSerialPort()
 // -------------------------------------------------------------------------------------------------
 void JevoisSerialPort::init()
 {
-    std::cout << "\nOPENING PORT";
+    printf("\n\nOPENING PORT");
     std::string port = "\0";
     for (auto& x : portID)
     {
         file = _open_port(&x);
 
         if (file == -1){
-            std::cout << "\nDevice not connected to " << x;
+            fprintf(stderr,"\n\nDevice not connected to %s", x.c_str());
             continue;
         }
         else{
-            std::cout << "\nDevice connected to  " << x;
+            printf("\n\nDevice connected to %s", x.c_str());
             port = x;
             break;
         }
     }
-    std::cout << std::flush;
 
     bool setupSuccess = _setup_port(baudRate);
 
     if(!setupSuccess){
-        std::cout << "\nCould not configure port " << port;
+        fprintf(stderr,"\n\nCould not configure port %s\n", port.c_str());
         throw EXIT_FAILURE;
     }
 
     if(file <= 0){
-        std::cout << "\nConnection attempt to port " << port << "with baudrate " << baudRate << "failed.";
+        fprintf(stderr,"\n\nConnection attempt to port %s with baudrate %i FAILED\n", port.c_str(), baudRate);
         throw EXIT_FAILURE;
     }
 
-    std::cout << "\nConnected to port " << port << " with baudrate " << baudRate;
+    printf("\n\nCONNECTED to port %s with baudrate %i", port.c_str(), baudRate);
 
     initStatus = SERIAL_PORT_OPEN;
-    std::cout << std::endl;
 
     return;
 }
@@ -79,16 +77,16 @@ void JevoisSerialPort::init()
 // -------------------------------------------------------------------------------------------------
 void JevoisSerialPort::deInit()
 {
-    std::cout << "\nCLOSING CAMERA SERIAL PORT";
+    printf("\n\nCLOSING CAMERA SERIAL PORT");
     if (file < 0){
-        fprintf(stderr,"\nNo serial connection exists");
+        fprintf(stderr,"\n\nNo serial connection exists");
         return;
     }
 
     int result = close(file);
 
     if(result){
-        fprintf(stderr, "\nWARNING: Error on port close (%i)", result);
+        fprintf(stderr, "\n\nWARNING: Error on port close (%i)", result);
     }
 
     initStatus = SERIAL_PORT_CLOSED;
@@ -119,7 +117,7 @@ void JevoisSerialPort::handle_quit()
         stop();
     }
     catch (int error) {
-        fprintf(stderr,"\nWarning, could not stop serial interface\n");
+        fprintf(stderr,"\n\nWarning, could not stop serial interface");
     }
 }
 
@@ -153,18 +151,18 @@ bool JevoisSerialPort::_setup_port(int bR)
 
     // Check file descriptor
     if(!isatty(file)){
-        fprintf(stderr,"\nERROR: file descriptor %d is NOT a serial port", file);
+        fprintf(stderr,"\n\nERROR: file descriptor %d is NOT a serial port", file);
         return false;
     }
 
     // Read file descriptor configuration
     struct termios config;
     if(tcgetattr(file,&config) < 0){
-        fprintf(stderr,"\nERROR: could not read configuration of file %d", file);
+        fprintf(stderr,"\n\nERROR: could not read configuration of file %d", file);
                 return false;
     }
 
-    std::cout << "\nSerial port attributes read." << std::flush;
+    printf("\n\nSerial port attributes read.");
 
     /*config.c_cflag = (config.c_cflag & ~CSIZE) | CS8;
     config.c_iflag &= ~IGNBRK;
@@ -257,7 +255,7 @@ bool JevoisSerialPort::_setup_port(int bR)
     // set attributes
     usleep(20000);
     if (tcsetattr(file,TCSANOW|TCSAFLUSH,&config) < 0){
-        fprintf(stderr,"\nERROR: could no set configuration of file %d",file);
+        fprintf(stderr,"\n\nERROR: could no set configuration of file %d",file);
         return false;
     }
     usleep(20000);
@@ -273,10 +271,7 @@ int JevoisSerialPort::read_msg(char *pmsg)
 {
     uint8_t msgReceived = false;
 
-    // Lock thread
-    //mutex.lock();
     int result = read(file,pmsg,1);
-    //mutex.unlock();
 
     if (result > 0){
         if (*pmsg == '\n' || *pmsg == '\r' || *pmsg == '\0')
@@ -284,7 +279,7 @@ int JevoisSerialPort::read_msg(char *pmsg)
         else
             return msgReceived = 0;
     } else{
-        fprintf(stderr,"\nERROR: Could not read from file %d",file);
+        fprintf(stderr,"\n\nERROR: Could not read from file %d",file);
         return -1;
     }
 }
@@ -296,10 +291,7 @@ int JevoisSerialPort::read_port(void *pmsg, int numBytes)
     ioctl(file, FIONREAD, &availBytes);
     if (availBytes > 0){
         availBytes = std::min(availBytes, numBytes);
-        // Lock thread
-        //mutex.lock();
         availBytes = read(file, (char *)pmsg, availBytes);
-        //mutex.unlock();
         received += std::max(0,availBytes);
     }
     return availBytes;
@@ -334,11 +326,9 @@ int JevoisSerialPort::write_msg(const std::string &msg)
     msg.copy(buffer,len,0);
     buffer[len] = '\0';
 
-    // Write buffer to serial port, locks port whilst writing
-    //mutex.lock();
+    // Write buffer to serial port
     int bytesWritten = static_cast<int>(write(file,buffer,len+1));
     tcdrain(file);
-    //mutex.unlock();
 
     return bytesWritten;
 }

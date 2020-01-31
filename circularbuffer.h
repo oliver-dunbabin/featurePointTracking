@@ -52,24 +52,25 @@ public:
     }
 
     bool push(T element){
-        mu.lock();
+        std::lock_guard<std::mutex> lock(mu);
+        //mu.lock();
         if (n == 0){
             data[f] = element;
             countInc(f);
             n++;
-            mu.unlock();
+            //mu.unlock();
             return true;
         }else if (f != b){
             data[f] = element;
             countInc(f);
             n++;
-            mu.unlock();
+            //mu.unlock();
             return true;
         }else{
             countInc(b);
             data[f] = element;
             countInc(f);
-            mu.unlock();
+            //mu.unlock();
             return false;
         }
     }
@@ -86,7 +87,7 @@ public:
 
     bool pop(T *element){
         if(n > 0){
-            mu.lock();
+            std::lock_guard<std::mutex> lock(mu);
             *element = data[b];
             if (n > 1){
                 countInc(b);
@@ -95,7 +96,6 @@ public:
             if(n == 0){
                 f = b;
             }
-            mu.unlock();
             return 1;
         }
         return 0;
@@ -114,9 +114,8 @@ public:
 
     bool copy(T &element){
         if (n > 0){
-            mu.lock();
+            std::lock_guard<std::mutex> lock(mu);
             element = data[b];
-            mu.unlock();
             return 1;
         }
         return 0;

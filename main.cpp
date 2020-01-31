@@ -15,11 +15,11 @@ int main()
 
     signal(SIGINT, handle_quit);
 
-    Onboard onboard(false);
+    Onboard onboard(true);
     onboard_quit = &onboard;
 
-    //onboard.updateOnboard();
-    onboard.testSensors();
+    onboard.updateOnboard();
+    //onboard.testSensors();
     //onboard.testCamera();
 
     return 0;

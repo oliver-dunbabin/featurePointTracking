@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <string.h>
 #include <vector>
+#include <iostream>
 
 bool sortDescending(const std::pair<int,int> &a,const std::pair<int,int> &b)
 {
@@ -60,7 +61,6 @@ void initDataStructs(shared *data)
 
 bool updateMappingFP(shared *data)
 {
-    vehicleState *vEst = data->getVState();
     // Update process model
     data->fpTimeF = data->timer.now();
     std::chrono::duration<double> dt = std::chrono::duration_cast<std::chrono::duration<double>>(data->fpTimeF-data->fpTimeI);
@@ -68,8 +68,8 @@ bool updateMappingFP(shared *data)
     data->fpTimeI = data->timer.now();
 
     // Update measurement model
-    if((data->gotCAMmsg) && (vEst != nullptr)){
-
+    if((data->gotCAMmsg) && (data->v_latent_initialised)){
+        printf("\n%f", dt.count());
         doCorrespondance(false, data);
         updateFPmeas(data);
         updatefpDatalink(data);
@@ -103,9 +103,8 @@ void updateFPmeas(shared *data)
 {
     fpDatabase *fpEst = data->getFpStates();
     camMessage *fpMeas = data->getCamMsg();
-    vehicleState *vehicleEst = data->getVState();
-    double vEst[3] = {vehicleEst->pos.X, vehicleEst->pos.Y, vehicleEst->pos.Z};
-    double qEst[4] = {vehicleEst->quat.Q0, vehicleEst->quat.Q1, vehicleEst->quat.Q2, vehicleEst->quat.Q3};
+    vehicleState *vEst = data->getVState();
+    double qEst[4] = {vEst->quat.Q0, vEst->quat.Q1, vEst->quat.Q2, vEst->quat.Q3};
 
     // DCM from inertial frame to Camera
     double Lc2i[3][3], Li2c[3][3];
@@ -130,9 +129,9 @@ void updateFPmeas(shared *data)
                     fpEst->newFpID++;
                     // feature point state given as:    y = [xa, ya, za, psi, theta, rho]'
                     // Set anchor position (inertial) to estimated vehicle location (inertial)
-                    fpEst->state[j][0]  = vehicleEst->pos.X;
-                    fpEst->state[j][1]  = vehicleEst->pos.Y;
-                    fpEst->state[j][2]  = vehicleEst->pos.Z;
+                    fpEst->state[j][0]  = vEst->pos.X;
+                    fpEst->state[j][1]  = vEst->pos.Y;
+                    fpEst->state[j][2]  = vEst->pos.Z;
                     // Initialise inverse depth as 0.1 (Civera et. al. 2008)
                     fpEst->state[j][5]  = RHO;
 
@@ -167,22 +166,23 @@ void updateFPmeas(shared *data)
             switch (data->filter_type) {
             case UKF:
             {
-                double SigPoints[NUMFPSTATES][2*NUMFPSTATES];
-                std::vector<std::vector<double>> SigMeas;
-                std::vector<std::vector<double>> sigPoints;
+                double SigPoints[2*NUMFPSTATES][NUMFPSTATES];
+                double SigMeas[2*NUMFPSTATES][2];
                 double predMeas[2] = {0};
-                int skip = 0;
                 findSigmaPoints(n, fpEst, SigPoints);
 
                 // Push each sigma point through measurement equation
-                for(int k = 0; k < 2*NUMFPSTATES; k++){
+                int L       = 2*NUMFPSTATES;
+                double l    = (double)L;
+                bool invalid_sigma = false;
+                for(int k = 0; k < L; k++){
                     double hcam[3], hin[3];
-                    double psi   = SigPoints[3][k];
-                    double theta = SigPoints[4][k];
-                    double rho   = SigPoints[5][k];
-                    double px    = SigPoints[0][k];
-                    double py    = SigPoints[1][k];
-                    double pz    = SigPoints[2][k];
+                    double psi   = SigPoints[k][3];
+                    double theta = SigPoints[k][4];
+                    double rho   = SigPoints[k][5];
+                    double px    = SigPoints[k][0];
+                    double py    = SigPoints[k][1];
+                    double pz    = SigPoints[k][2];
                     double m[3];
                     double stheta   = sin(theta);
                     double ctheta   = cos(theta);
@@ -194,31 +194,28 @@ void updateFPmeas(shared *data)
                     m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
                     m[2] = -stheta;         //-sin(theta);
                     // Unit vector from vehicle location to feature point (local coordinate system)
-                    hin[0] = rho*(px - vehicleEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
-                    hin[1] = rho*(py - vehicleEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
-                    hin[2] = rho*(pz - vehicleEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
+                    hin[0] = rho*(px - vEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
+                    hin[1] = rho*(py - vEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
+                    hin[2] = rho*(pz - vEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
                     // Unit vector from vehicle location to feature point (camera frame)
                     hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
                     hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
                     hcam[2] = Li2c[2][0]*hin[0] + Li2c[2][1]*hin[1] + Li2c[2][2]*hin[2];
 
-                    // Make sure not finding singularity
+                    // Make sure not finding singularity. If we do, discard measurement
                     if (hcam[0] > 0.01){
                         // Compute estimated pixel location of fp
-                        std::vector<double> meas{ (focallengthx*hcam[1]/hcam[0]), (focallengthy*hcam[2]/hcam[0]) };
-                        std::vector<double> state{ px, py, pz, psi, theta, rho };
-                        SigMeas.push_back(meas);
-                        sigPoints.push_back(state);
-                        predMeas[0] += meas.at(0);
-                        predMeas[1] += meas.at(1);
+                        SigMeas[k][0]   = focallengthx*hcam[1]/hcam[0];
+                        SigMeas[k][1]   = focallengthy*hcam[2]/hcam[0];
+                        // Get mean of these sigma measurement results to give predicted measurement
+                        predMeas[0]    += SigMeas[k][0]/l;
+                        predMeas[1]    += SigMeas[k][1]/l;
+                    }else {
+                        invalid_sigma = true;
+                        break;
                     }
                 }
-                // Get mean of these sigma measurement results to give predicted measurement
-                double l = SigMeas.size();
-                predMeas[0] /= l;
-                predMeas[1] /= l;
-
-
+                if(invalid_sigma){break;}
                 if ((predMeas[0] > -1) && (predMeas[0] < 1) &&            // ensure predicted fp location lies on the camera sensor
                     (predMeas[1] > -(double)IMAGESIZEV/IMAGESIZEH) &&
                     (predMeas[1] < (double)IMAGESIZEV/IMAGESIZEH)){
@@ -233,16 +230,16 @@ void updateFPmeas(shared *data)
                     double pz    = fpEst->state[n][2];
                     double Py[2][2] = {0};
                     double Pxy[NUMFPSTATES][NUMFPSTATES] = {0};
-                    for(uint k = 0; k < SigMeas.size(); k++){
+                    for(int k = 0; k < L; k++){
                         double E_y[2][2], E_x[NUMFPSTATES][2];
                         double in_y[2] = {(SigMeas[k][0] - predMeas[0]),
                                           (SigMeas[k][1] - predMeas[1])};
-                        double in_x[NUMFPSTATES] = {(sigPoints[k][0] - px),
-                                                    (sigPoints[k][1] - py),
-                                                    (sigPoints[k][2] - pz),
-                                                    (sigPoints[k][3] - psi),
-                                                    (sigPoints[k][4] - theta),
-                                                    (sigPoints[k][5] - rho)};
+                        double in_x[NUMFPSTATES] = {(SigPoints[k][0] - px),
+                                                    (SigPoints[k][1] - py),
+                                                    (SigPoints[k][2] - pz),
+                                                    (SigPoints[k][3] - psi),
+                                                    (SigPoints[k][4] - theta),
+                                                    (SigPoints[k][5] - rho)};
                         mat_mult_T(in_y, 2, 1, in_y, 2, 1, (double *)E_y);
                         mat_mult_T(in_x, NUMFPSTATES, 1, in_y, 2, 1, (double *)E_x);
                         Py[0][0]    += E_y[0][0]/l; Py[0][1]  += E_y[0][1]/l;
@@ -313,9 +310,9 @@ void updateFPmeas(shared *data)
                 m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
                 m[2] = -stheta;         //-sin(theta);
                 // Unit vector from vehicle location to feature point (local coordinate system)
-                hin[0] = rho*(px - vehicleEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
-                hin[1] = rho*(py - vehicleEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
-                hin[2] = rho*(pz - vehicleEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
+                hin[0] = rho*(px - vEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
+                hin[1] = rho*(py - vEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
+                hin[2] = rho*(pz - vEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
                 // Unit vector from vehicle location to feature point (camera frame)
                 hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
                 hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
@@ -457,7 +454,7 @@ void pointCorrespondance(shared *data)
 {
     fpDatabase *fpEst = data->getFpStates();
     camMessage *fpMeas = data->getCamMsg();
-    vehicleState *vehicleEst = data->getVState();
+    vehicleState *vEst = data->getVState();
 
     double Li2c[3][3];
     for(int t = 0; t < 3; t++){
@@ -492,9 +489,9 @@ void pointCorrespondance(shared *data)
             m[0] =  cpsi*ctheta;
             m[1] =  spsi*ctheta;
             m[2] = -stheta;
-            hin[0] = rho*(px - vehicleEst->pos.X) + m[0];
-            hin[1] = rho*(py - vehicleEst->pos.Y) + m[1];
-            hin[2] = rho*(pz - vehicleEst->pos.Z) + m[2];
+            hin[0] = rho*(px - vEst->pos.X) + m[0];
+            hin[1] = rho*(py - vEst->pos.Y) + m[1];
+            hin[2] = rho*(pz - vEst->pos.Z) + m[2];
             hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
             hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
             hcam[2] = Li2c[2][0]*hin[0] + Li2c[2][1]*hin[1] + Li2c[2][2]*hin[2];
@@ -650,7 +647,7 @@ void pointCorrespondance(shared *data)
 void ComputeCinvD(int j, double hcam[3], double focallength[2], double Cfp[NUMFPMEAS][NUMFPSTATES], shared *data)
 {
     fpDatabase *fpEst = data->getFpStates();
-    vehicleState * vehicleEst = data->getVState();
+    vehicleState * vEst = data->getVState();
     double Li2c[3][3];
     for(int t = 0; t < 3; t++){
         for(int r = 0; r < 3; r++)
@@ -700,9 +697,9 @@ void ComputeCinvD(int j, double hcam[3], double focallength[2], double Cfp[NUMFP
     // dh/dpsi      = Li2c * dm[3]/dpsi
     // dh/dtheta    = Li2c * dm[3]/dtheta
     // dh/drho      = Li2c * d(pa-vEst)/drho
-    dmdPsi[0] = -spsi*ctheta;           dmdTheta[0] = -cpsi*stheta;     drdRho[0] = px - vehicleEst->pos.X;
-    dmdPsi[1] =  cpsi*ctheta;           dmdTheta[1] = -spsi*stheta;     drdRho[1] = py - vehicleEst->pos.Y;
-    dmdPsi[2] =  0;                     dmdTheta[2] = -ctheta;          drdRho[2] = pz - vehicleEst->pos.Z;
+    dmdPsi[0] = -spsi*ctheta;           dmdTheta[0] = -cpsi*stheta;     drdRho[0] = px - vEst->pos.X;
+    dmdPsi[1] =  cpsi*ctheta;           dmdTheta[1] = -spsi*stheta;     drdRho[1] = py - vEst->pos.Y;
+    dmdPsi[2] =  0;                     dmdTheta[2] = -ctheta;          drdRho[2] = pz - vEst->pos.Z;
 
     mat_mult((double*)dzdrC,NUMFPMEAS,3,dmdPsi,3,1,dzdPsi);
     mat_mult((double*)dzdrC,NUMFPMEAS,3,dmdTheta,3,1,dzdTheta);
@@ -741,7 +738,7 @@ void ComputeCinvD(int j, double hcam[3], double focallength[2], double Cfp[NUMFP
 
 
 
-void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[NUMFPSTATES][2*NUMFPSTATES])
+void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[2*NUMFPSTATES][NUMFPSTATES])
 {
     double nP[NUMFPSTATES][NUMFPSTATES];
     mat_scalar_mult((double*)fpEst->fpP[i], NUMFPSTATES, NUMFPSTATES, NUMFPSTATES, (double *)nP);
@@ -750,8 +747,8 @@ void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[NUMFPSTATES][2*N
 
     for (int k = 0; k < NUMFPSTATES; k++){
         for (int j = 0; j < NUMFPSTATES; j++){
-            SigPoints[j][k] = fpEst->state[i][j] + U[k][j];
-            SigPoints[j][k+NUMFPSTATES] = fpEst->state[i][j] - U[k][j];
+            SigPoints[k][j]             = fpEst->state[i][j] + U[k][j];
+            SigPoints[k+NUMFPSTATES][j] = fpEst->state[i][j] - U[k][j];
         }
     }
 }
@@ -784,4 +781,79 @@ void CholeskyDecomposition(double P[NUMFPSTATES][NUMFPSTATES], double U[NUMFPSTA
             }
         }
     }
+}
+
+
+/* Adds element to buffer for time delay compensation
+ * populated:   flag to initialise the buffer
+ * element:     value of state at current time
+ * buffer:      pointer to array of delayed states
+ * bufferSize:  number of elements in buffer
+*/
+void time_delay_fill(bool populated, vehicleState &element, vehicleState *buffer, int bufferSize)
+{
+    // Populate the buffer with our first measurement
+    if(!populated)
+    {
+        for(int i = 0; i < bufferSize; i++)
+            buffer[i] = element;
+
+        return;
+    }
+
+    // Update the buffer with the next incoming measurement
+    memmove(buffer+1, buffer, sizeof(vehicleState)*(bufferSize-1));
+    buffer[0] = element;
+}
+
+
+/* Function which takes most recently received delayed state and interpolates
+ * past states to that point.
+ * populated:    Has the latency buffer been populated yet?
+ * time:        time value for which to interpolate past states
+ * dt:          sample rate of stored past states
+ * buffer:      pointer to array of stored past states
+ * bufferSize:  numder of elements in buffer
+*/
+vehicleState time_delay_get(bool populated, uint64_t time, double dt, vehicleState *buffer, int bufferSize)
+{
+    if(populated){
+        // Find intersection of value with buffer array and return index
+        int start = 0;
+        while(start != bufferSize){
+            if(time >= buffer[start].timestamp){break;}
+            start++;
+        }
+        start = (--start < 0) ? 0 : start;
+
+        // Retrieve delayed states from buffer by interpolating between nearest past states
+        vehicleState out;
+
+        if(start >= bufferSize-1){          // If we have experience entire buffer worth of delay
+            out = buffer[bufferSize-1];     // Best we can do
+        }else{
+            double fraction;
+            fraction    = (buffer[start].timestamp - time)/(1000000.*dt);
+
+            out = interpolate_Vstate(fraction, (buffer[start]), (buffer[start+1]));
+        }
+        out.timestamp = time;
+        return out;
+    }
+}
+
+
+vehicleState interpolate_Vstate(double frac, const vehicleState& V1, const vehicleState& V2)
+{
+    vehicleState out;
+    out.pos.X = V1.pos.X*(1-frac) + V2.pos.X*frac;
+    out.pos.Y = V1.pos.Y*(1-frac) + V2.pos.Y*frac;
+    out.pos.Z = V1.pos.Z*(1-frac) + V2.pos.Z*frac;
+    /*TODO: CONVERT THIS TO SLERP*/
+    out.quat.Q0 = V1.quat.Q0*(1-frac) + V2.quat.Q0*frac;
+    out.quat.Q1 = V1.quat.Q1*(1-frac) + V2.quat.Q1*frac;
+    out.quat.Q2 = V1.quat.Q2*(1-frac) + V2.quat.Q2*frac;
+    out.quat.Q3 = V1.quat.Q3*(1-frac) + V2.quat.Q3*frac;
+
+    return out;
 }

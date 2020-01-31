@@ -3,9 +3,13 @@
 
 #include <stdint.h>
 #include <chrono>
+#include <stdio.h>
+#include <cstring>
+#include <mutex>
 
 #define EKF 0
 #define UKF 1
+#define t265_LATENCY 100
 
 namespace constants {
     const double RHO = 0.5;                 // inverse depth initialisation (1/m)
@@ -35,6 +39,10 @@ namespace constants {
     const int FOCALLENGTH = 2800;           // sensor focal length [micrometers]
     const double PI = 3.1415926535;         // PI (duh!)
     const double GRAVITY = 9.807;           // positive down in NED coordinates [m/s^2]
+
+    // T265 properties
+    const double t265_period = 0.005013;          // Update period of t265 (s)
+
 }
 
 using namespace constants;
@@ -77,20 +85,20 @@ struct localPos{
     double X;
     double Y;
     double Z;
-};
+}__attribute__((packed));
 
 struct quatAtt{
     double Q0;
     double Q1;
     double Q2;
     double Q3;
-};
+}__attribute__((packed));
 
 struct vehicleState{
     localPos pos;
     quatAtt quat;
     uint64_t timestamp;
-};
+}__attribute__((packed));
 
 
 class shared
@@ -117,6 +125,8 @@ public:
     bool gotCAMmsg;
     bool gotPOSEmsg;
     int filter_type;
+    vehicleState v_latent[t265_LATENCY];
+    bool v_latent_initialised = false;
 
     Clock::time_point fpTimeI;
     Clock::time_point fpTimeF;

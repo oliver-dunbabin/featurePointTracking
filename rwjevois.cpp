@@ -1,5 +1,6 @@
 #include "rwjevois.h"
 #include "chrono"
+#include <sstream>
 
 // Checksum calculation
 unsigned char calculateCheckSum(unsigned char *buf, int byteCount, int index){
@@ -85,7 +86,7 @@ bool rwJevois::setJevoisClock()
             read_messages();
             time_point<high_resolution_clock> time2 = high_resolution_clock::now();
             deltaT = duration_cast<duration<int,std::micro>>(time2 - now).count();
-            std::cout << "\n" << deltaT << std::endl;
+            printf("\n\n%i", deltaT);
             usleep(1000);
             return true;
         }else{
@@ -106,7 +107,7 @@ int rwJevois::write_messages(const std::string &msg, std::chrono::time_point<std
     auto deltaT = std::chrono::duration_cast<std::chrono::duration<int,std::micro>>(now - prevT).count();
 
     if(len > 1){
-        std::cout << "\nSENT: [   " << msg << "   ] with delay: " << deltaT << " micro s";
+        printf("\n\nSENT: [   %s   ] with delay: %i micro sec", msg.c_str(), deltaT);
     }
 
     // update counters
@@ -123,7 +124,7 @@ int rwJevois::write_messages(const std::string &msg)
 
 
     if(len > 1){
-        std::cout << "\nSENT: [   " << msg << "   ]";
+        printf("\n\nSENT: [   %s   ]", msg.c_str());
     }
 
     // update counters
@@ -149,7 +150,7 @@ void rwJevois::read_messages(std::string &full_msg)
             fprintf(stderr,"\nMessage length exceeds BUFFLEN %i",BUFFLEN);
             return;
         }else if(full_msg.size() > 1 && received_all){
-            std::cout << "\nRECEIVED: [   " << full_msg << "   ]";
+            printf("\n\nRECEIVED: [   %s   ]", full_msg.c_str());
             return;
         }
     }
@@ -171,11 +172,11 @@ void rwJevois::read_messages()
             fprintf(stderr,"\nMessage length exceeds BUFFLEN %i",BUFFLEN);
             return;
         }else if(full_msg.size() > 1 && received_all){
-            std::cout << "\nRECEIVED: [   " << full_msg << "   ]";
+            printf("\n\nRECEIVED: [   %s   ]", full_msg.c_str());
             return;
         }
     }
-    std::cout << "\nRECEIVED: [   " << full_msg << "   ]";
+    printf("\n\nRECEIVED: [   %s   ]", full_msg.c_str());
 }
 
 
@@ -264,12 +265,14 @@ void rwJevois::readMsg()
 
 void rwJevois::dispPreview(const harrisMessageFP msg, std::chrono::milliseconds t)
 {
-    std::cout << "\t " << t.count();
-    std::cout << "\n" << write_count << "\t:" << msg.time << "," << (double)msg.sendT/1000 << "," << msg.imageWidth << "," << msg.imageHeight;
+    std::stringstream stream;
+    stream << "\n\n\t " << t.count();
+    stream << "\n" << write_count << "\t:" << msg.time << "," << (double)msg.sendT/1000 << "," << msg.imageWidth << "," << msg.imageHeight;
     for (int b = 0; b < 10; b++){
-        std::cout << ",(" << msg.fpVal[b] << "," << msg.fpCoord[b][0] << "," << msg.fpCoord[b][1] << ")";
+        stream << ",(" << msg.fpVal[b] << "," << msg.fpCoord[b][0] << "," << msg.fpCoord[b][1] << ")";
     }
-    std::cout << "\n" << std::endl;
+    std::string str = stream.str();
+    printf("%s",(stream.str()).c_str());
 }
 
 
@@ -278,7 +281,7 @@ void rwJevois::start()
     // Check serial port
     if (serial_port->initStatus != SERIAL_PORT_OPEN ){
         std::string portError = serial_port->getPortID();
-        fprintf(stderr,"\nERROR: Serial port %s not open at ", &portError);
+        fprintf(stderr,"\nERROR: Serial port %s not open at ", portError.c_str());
         throw 1;
     }
 
@@ -292,13 +295,15 @@ void rwJevois::start()
     write_messages(msg);
     usleep(1000);
 
-    std::cout << "\nSTART READ THREAD" << std::endl;
+    printf("\n\nSTART CAM READ THREAD");
     readThread = std::thread(&rwJevois::read_thread,this);
+    std::cout << std::flush;
+
 }
 
 void rwJevois::stop()
 {
-    std::cout << "\nCLOSING CAM READ THREADS AND RESTARTING CAMERA";
+    printf("\n\nCLOSING CAM READ THREADS AND RESTARTING CAMERA");
 
     //Signal exit
     time_to_exit = true;
@@ -337,7 +342,6 @@ void rwJevois::read_thread()
         return;
     }else{
         reading_status = true;
-
         while(!time_to_exit)
         {
             readMsg();

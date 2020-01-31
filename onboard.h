@@ -8,6 +8,7 @@
 #include "t265_connect.h"
 #include "logdata.h"
 #include <stdlib.h>
+#include "plotfp.h"
 
 #define ENDFILE 0
 #define ERR -1
@@ -35,15 +36,19 @@ public:
 
 private:
 
+    bool plot = false;
+    bool log_data;
+    bool first_vEst = true;
     JevoisSerialPort *sPort;
     JevoisSerialPort *sPort_exit;
     rwJevois *camera;
     rwJevois *camera_exit;
     T265_Connect t265;
     T265_Connect *t265_exit;
+    plotFP visualise;
+    uint32_t tdelay1;
 
     shared data;
-    bool log_data;
     LogData *fpMeasFile;
     LogData *PoseFile;
     LogData *fpEstFile;
