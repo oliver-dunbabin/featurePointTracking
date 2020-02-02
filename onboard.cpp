@@ -1,5 +1,6 @@
 #include "onboard.h"
 #include <unistd.h>
+#include <sys/stat.h>
 
 Onboard::Onboard(bool log):visualise(plot)
 {
@@ -28,13 +29,13 @@ Onboard::Onboard(bool log):visualise(plot)
 }
 
 
-Onboard::Onboard(std::string filename, std::string path, bool log):visualise(plot)
+Onboard::Onboard(std::string file, std::string path, bool log):visualise(plot)
 {
     data.gotCAMmsg  = false;
     data.gotPOSEmsg = false;
     time_to_exit    = false;
 
-    readfile = filename;
+    filename = file;
     setFileDir(path);
     log_data = log;
 
@@ -42,8 +43,14 @@ Onboard::Onboard(std::string filename, std::string path, bool log):visualise(plo
     camera      = nullptr;
 
     if(log_data){
-        std::string estpath = filepath + "/estimate/" + readfile + "_estimate.fpBIN";
-        fpEstFile   = new LogData(estpath, false);
+        std::string estpath = filedir + "estimate/" + filename + ".fpBIN";
+        struct stat buffer;
+        int i = 0;
+        while(stat(estpath.c_str(), &buffer) == 0){
+            i++;
+            estpath = filedir + "estimate/" + filename + "(" + std::to_string(i) + ")" + ".fpBIN";
+        }
+        fpEstFile   = new LogData(estpath, -1);
     }else{
         fpMeasFile  = nullptr;
         PoseFile    = nullptr;
@@ -97,9 +104,9 @@ void Onboard::updateOnboard()
                 fpDatalink *fpData = data.getFpData();
                 fprintf(stderr,"\t%s\n\t%s\n\t%s\n\n", fpMeasFile->getFilename().c_str(), fpEstFile->getFilename().c_str(),PoseFile->getFilename().c_str());
                 using namespace std::chrono;
-                time_point<high_resolution_clock> t1 = high_resolution_clock::now();
+                high_resolution_clock::time_point t1 = high_resolution_clock::now();
                 fpEstFile->saveBinary<fpDatalink>(fpData, sizeof(fpDatalink));
-                time_point<high_resolution_clock> t2 = high_resolution_clock::now();
+                high_resolution_clock::time_point t2 = high_resolution_clock::now();
                 duration<double> dt = duration_cast<duration<double, std::micro>>(t2 - t1);
                 printf("write time: %f\n", dt.count());
             }
@@ -116,15 +123,23 @@ void Onboard::updateOnboard()
 
 void Onboard::simulation()
 {
-    std::string campath = filepath + "/measurement/" + readfile + "_measurement.fpBIN";
-    std::string pospath = filepath + "/pose/" + readfile + "_pose.fpBIN";
+    std::string campath = filedir + "measurement/" + filename + ".fpBIN";
+    std::string pospath = filedir + "pose/" + filename + ".fpBIN";
+
     uint32_t frame = 0;
+    measfile = fopen(campath.c_str(), "rb");
+    posefile = fopen(pospath.c_str(), "rb");
+    std::cout << fpEstFile->getFilename();
+
+
 
     while (!time_to_exit){
         camMessage fpMsg;
         vehicleState vEst;
-        int gotpose = readFromFile<vehicleState>(&vEst, pospath.c_str());
-        int gotcam  = readFromFile<camMessage>(&fpMsg, campath.c_str());
+        int gotpose = readFromFile<vehicleState>(&vEst, pospath.c_str(), posefile);
+        int gotcam  = readFromFile<camMessage>(&fpMsg, campath.c_str(), measfile);
+        time_delay_fill(data.v_latent_initialised, vEst, data.v_latent, t265_LATENCY);
+        data.v_latent_initialised = true;
 
         uint64_t time_i;
         if(gotpose == OK){
@@ -144,14 +159,14 @@ void Onboard::simulation()
             while (!data.gotCAMmsg){
                 uint64_t time_f;
                 if(gotpose == OK){
-                    data.setVehicleState(&vEst);
 
                     if(vEst.timestamp > fpMsg.time_stmp){
                         data.gotCAMmsg = true;
                         time_i = fpMsg.time_stmp;
                     }else{
-                        gotpose = readFromFile<vehicleState>(&vEst, pospath.c_str());
+                        gotpose = readFromFile<vehicleState>(&vEst, pospath.c_str(), posefile);
                         data.setVehicleState(&vEst);
+                        time_delay_fill(data.v_latent_initialised, vEst, data.v_latent, t265_LATENCY);
                     }
 
                     time_f = vEst.timestamp;
@@ -160,24 +175,32 @@ void Onboard::simulation()
                     time_i = time_f;
                 }
             }
+
+            vehicleState vState = time_delay_get(data.v_latent_initialised, fpMsg.time_stmp, t265_period, data.v_latent, t265_LATENCY);
+            data.setVehicleState(&vState);
             doCorrespondance(false, &data);
             updateFPmeas(&data);
             updatefpDatalink(&data);
             if(log_data){
                 fpDatalink *fpData = data.getFpData();
+                for(int i=0; i<DBSIZE; i++){printf("(%f,%f,%f,%f,%f,%f)", fpData->state[i][0], fpData->state[i][1], fpData->state[i][2], fpData->state[i][3],
+                        fpData->state[i][4], fpData->state[i][5]);}
+                printf("\n\n\n");
                 fpEstFile->saveBinary<fpDatalink>(fpData, sizeof(fpDatalink));
             }
             data.gotCAMmsg = false;
             frame ++;
-            visualise.plot(&data, frame);
+            //visualise.plot(&data, frame);
         }else if (gotcam == ENDFILE){
-            printf("\n\nEnd of file reached");
+            printf("\n\nEnd of file reached\n");
             break;
         }else{
-            printf("\n\nCould not open cam file");
+            printf("\n\nCould not open cam file\n");
             break;
         }
     }
+    fclose(measfile);
+    fclose(posefile);
 }
 
 

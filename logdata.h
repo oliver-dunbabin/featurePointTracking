@@ -20,6 +20,8 @@ public:
 
     void saveData(std::string data);
 
+    void openFile();
+
     template <typename T>
     void saveBinary(T *data, int bytesize)
     {
@@ -30,6 +32,8 @@ public:
     }
 
     const std::string getFilename(){return filename;}
+
+    void setFilename(std::string name){filename = name;}
 
     void close();
 

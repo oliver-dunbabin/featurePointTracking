@@ -15,12 +15,14 @@ int main()
 
     signal(SIGINT, handle_quit);
 
-    Onboard onboard(true);
+    /*Onboard onboard(true);
     onboard_quit = &onboard;
-
     onboard.updateOnboard();
     //onboard.testSensors();
-    //onboard.testCamera();
+    //onboard.testCamera();*/
+
+    Onboard onboard("20-01-31_02-11-57","/home/oliver/MySoftware/featurePointTracking/testdata/", true);
+    onboard.simulation();
 
     return 0;
 }

@@ -19,7 +19,7 @@ class Onboard
 public:
 
     Onboard(bool log);
-    Onboard(std::string filename, std::string path, bool log);
+    Onboard(std::string file, std::string path, bool log);
     ~Onboard();
 
     bool time_to_exit;
@@ -52,23 +52,21 @@ private:
     LogData *fpMeasFile;
     LogData *PoseFile;
     LogData *fpEstFile;
-    std::string readfile;
-    FILE *file;
-    std::string filepath;
+    std::string filename;
+    std::string filedir;
+    FILE *measfile, *posefile;
 
     void sensorUpdate();
 
-    void setFileDir(std::string path){filepath = path;}
+    void setFileDir(std::string path){filedir = path;}
 
     template<typename T>
-    bool readFromFile(T *datastruct, const char *filename){
-        file = fopen(filename, "r");
+    bool readFromFile(T *datastruct, const char *filename, FILE *file){
         if (feof(file)){
             printf("end of file reached for %s", filename);
             return ENDFILE;
         }else if(file != nullptr){
             fread(datastruct, sizeof(T), 1, file);
-            fclose(file);
             return OK;
         }else{
             printf("could not open file %s", filename);
