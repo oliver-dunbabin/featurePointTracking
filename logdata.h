@@ -8,8 +8,9 @@
 #include <string.h>
 #include <string>
 
-#define READ 1
-#define WRITE 0
+#define READ 0
+#define TXTWRITE 1
+#define BINWRITE 2
 
 class LogData
 {
@@ -26,12 +27,14 @@ public:
     void saveBinary(T *data, int bytesize)
     {
 
-        outfile = fopen(filename.c_str(), "a");
+        outfile = fopen(filepath.c_str(), "a");
         fwrite(data, bytesize, 1, outfile);
         fclose(outfile);
     }
 
     const std::string getFilename(){return filename;}
+
+    const std::string getFilepath(){return filepath;}
 
     void setFilename(std::string name){filename = name;}
 
@@ -40,6 +43,8 @@ public:
 private:
 
     std::string filename;
+
+    std::string filepath;
 
     FILE* outfile = nullptr;
 

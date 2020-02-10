@@ -1,5 +1,4 @@
 #include "fpmappingproc.h"
-#include "matrix.h"
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
@@ -10,32 +9,6 @@
 bool sortDescending(const std::pair<int,int> &a,const std::pair<int,int> &b)
 {
     return (a.first > b.first);
-}
-
-
-void quat2dcm321(double qEst[4], double DCM[3][3])
-{
-    DCM[0][0] = qEst[0]*qEst[0] + qEst[1]*qEst[1] - qEst[2]*qEst[2] - qEst[3]*qEst[3];
-    DCM[0][1] = 2*(qEst[1]*qEst[2] + qEst[0]*qEst[3]);
-    DCM[0][2] = 2*(qEst[1]*qEst[3] - qEst[0]*qEst[2]);
-    DCM[1][0] = 2*(qEst[1]*qEst[2] - qEst[0]*qEst[3]);
-    DCM[1][1] = qEst[0]*qEst[0] - qEst[1]*qEst[1] + qEst[2]*qEst[2] - qEst[3]*qEst[3];
-    DCM[1][2] = 2*(qEst[2]*qEst[3] + qEst[0]*qEst[1]);
-    DCM[2][0] = 2*(qEst[1]*qEst[3] + qEst[0]*qEst[2]);
-    DCM[2][1] = 2*(qEst[2]*qEst[3] - qEst[0]*qEst[1]);
-    DCM[2][2] = qEst[0]*qEst[0] - qEst[1]*qEst[1] - qEst[2]*qEst[2] + qEst[3]*qEst[3];
-}
-
-void map_vector( double T[3][3], double vin[3], double vout[3] ) {
-
-  int i, j;
-
-  for( i=0; i<3; i++ ) {
-    vout[i] = 0.0;
-    for( j=0; j<3; j++ )
-      vout[i] += T[i][j]*vin[j];
-  }
-
 }
 
 
@@ -69,7 +42,7 @@ bool updateMappingFP(shared *data)
 
     // Update measurement model
     if((data->gotCAMmsg) && (data->v_latent_initialised)){
-        printf("\n%f", dt.count());
+//        printf("\n%f", dt.count());
         doCorrespondance(false, data);
         updateFPmeas(data);
         updatefpDatalink(data);
@@ -846,14 +819,20 @@ vehicleState time_delay_get(bool populated, uint64_t time, double dt, vehicleSta
 vehicleState interpolate_Vstate(double frac, const vehicleState& V1, const vehicleState& V2)
 {
     vehicleState out;
+    double q[4];
     out.pos.X = V1.pos.X*(1-frac) + V2.pos.X*frac;
     out.pos.Y = V1.pos.Y*(1-frac) + V2.pos.Y*frac;
     out.pos.Z = V1.pos.Z*(1-frac) + V2.pos.Z*frac;
     /*TODO: CONVERT THIS TO SLERP*/
-    out.quat.Q0 = V1.quat.Q0*(1-frac) + V2.quat.Q0*frac;
-    out.quat.Q1 = V1.quat.Q1*(1-frac) + V2.quat.Q1*frac;
-    out.quat.Q2 = V1.quat.Q2*(1-frac) + V2.quat.Q2*frac;
-    out.quat.Q3 = V1.quat.Q3*(1-frac) + V2.quat.Q3*frac;
+    q[0] = V1.quat.Q0*(1-frac) + V2.quat.Q0*frac;
+    q[1] = V1.quat.Q1*(1-frac) + V2.quat.Q1*frac;
+    q[2] = V1.quat.Q2*(1-frac) + V2.quat.Q2*frac;
+    q[3] = V1.quat.Q3*(1-frac) + V2.quat.Q3*frac;
+    quatNorm(q);
+    out.quat.Q0 = q[0];
+    out.quat.Q1 = q[1];
+    out.quat.Q2 = q[2];
+    out.quat.Q3 = q[3];
 
     return out;
 }

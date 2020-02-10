@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <cstring>
 #include <mutex>
+#include "matrix.h"
+
 
 #define EKF 0
 #define UKF 1
@@ -132,5 +134,14 @@ public:
     Clock::time_point fpTimeF;
     Clock timer;
 };
+
+void quat2dcm321( double qEst[4], double DCM[3][3]);
+
+void map_vector( double T[3][3], double vin[3], double vout[3] );
+
+void quatNorm(double q[4]);
+
+void quat_mult( double a[4], double b[4], double c[4]);
+
 
 #endif // SHARED_H

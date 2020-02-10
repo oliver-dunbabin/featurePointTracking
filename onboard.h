@@ -36,9 +36,11 @@ public:
 
 private:
 
-    bool plot = false;
+    bool gif = false;
     bool log_data;
     bool first_vEst = true;
+    bool use_vicon = true;
+    std::thread ViconThread;
     JevoisSerialPort *sPort;
     JevoisSerialPort *sPort_exit;
     rwJevois *camera;
@@ -82,6 +84,10 @@ private:
     void logEstimates();
 
     void handle_quit();
+
+    void getViconData();
+
+    void startViconThread();
 
 };
 

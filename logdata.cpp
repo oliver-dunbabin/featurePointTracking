@@ -3,10 +3,14 @@
 LogData::LogData(std::string parentdir, int operation)
 {
 
-    if (operation == WRITE){
+    if (operation == TXTWRITE){
         createFilename(parentdir);
+        filepath += ".txt";
+    }else if (operation == BINWRITE){
+        createFilename(parentdir);
+        filepath += ".fpBIN";
     }else{
-        filename = parentdir;
+        filepath = parentdir;
     }
     //printf("file created at: %s\n", filename);
 }
@@ -21,16 +25,15 @@ void LogData::createFilename(std::string parentdir)
     char date_time[30];
     strftime(date_time,30,"%y-%m-%d_%H-%M-%S",info);
     std::string filetime(date_time);
-
-
-    filename +=  parentdir + "/" + filetime + ".fpBIN";
+    filepath +=  parentdir + "/" + filetime;
+    filename = filetime;
 }
 
 
 void LogData::saveData(std::string data)
 {
 
-    fileID.open(filename, std::ofstream::out | std::ofstream::app);
+    fileID.open(filepath, std::ofstream::out | std::ofstream::app);
 
     if(!fileID.is_open()){
         printf("\n\nCould not open file");
