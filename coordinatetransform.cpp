@@ -74,6 +74,7 @@ void euler2quat321(double *phi, double *theta, double *psi, double q[4])
  */
 void quat2dcm(double q[4], double R[3][3])
 {
+    quatNorm(q);
     R[0][0] = q[0]*q[0] + q[1]*q[1] - q[2]*q[2] - q[3]*q[3];
     R[0][1] = 2*(q[1]*q[2] + q[0]*q[3]);
     R[0][2] = 2*(q[1]*q[3] - q[0]*q[2]);
@@ -364,6 +365,7 @@ void quatmult(double q1[4], double q2[4], double q[4])
     q[1] = q1[1]*q2[0] + q1[0]*q2[1] - q1[3]*q2[2] + q1[2]*q2[3];
     q[2] = q1[2]*q2[0] + q1[3]*q2[1] + q1[0]*q2[2] - q1[1]*q2[3];
     q[3] = q1[3]*q2[0] - q1[2]*q2[1] + q1[1]*q2[2] + q1[0]*q2[3];
+
 }
 
 void quatinv(double q1[4], double q[4])
@@ -382,4 +384,32 @@ void quatinv(double q1[4], double q[4])
     }
 }
 
+
+void map_vector(const double T[3][3], const double vin[3], double vout[3] ) {
+
+  int i, j;
+
+  for( i=0; i<3; i++ ) {
+    vout[i] = 0.0;
+    for( j=0; j<3; j++ )
+      vout[i] += T[i][j]*vin[j];
+  }
+
+}
+
+
+void quatNorm(double q[4])
+{
+    double qmag = sqrt( q[0]*q[0] + q[1]*q[1] + q[2]*q[2] + q[3]*q[3]);
+    if ( qmag > 0.01 && qmag < 100.0) {
+        qmag = 1./qmag;
+        for ( int i = 0; i < 4; i++ ) q[i] *= qmag;
+    }
+    else{
+        q[0] = 1;
+        q[1] = 0;
+        q[2] = 0;
+        q[3] = 0;
+    }
+}
 

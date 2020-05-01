@@ -27,7 +27,7 @@ void pointCorrespondance(shared *data);
 
 void quat2dcm321(double quat[4], double dcm[3][3]);
 
-void map_vector( double T[3][3], double vin[3], double vout[3] );
+void map_vector( const double T[3][3], const double vin[3], double vout[3] );
 
 bool sortDescending(const std::pair<int,int> &a,const std::pair<int,int> &b);
 

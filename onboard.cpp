@@ -2,8 +2,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "DataStreamClient.h"
+#include "coordinatetransform.h"
 
-Onboard::Onboard(bool log):visualise(gif)
+Onboard::Onboard(bool log, int filterType):visualise(gif), data(filterType)
 {
     data.gotCAMmsg  = false;
     data.gotPOSEmsg = false;
@@ -31,7 +32,7 @@ Onboard::Onboard(bool log):visualise(gif)
 }
 
 
-Onboard::Onboard(std::string file, std::string path, bool log):visualise(gif)
+Onboard::Onboard(std::string file, std::string path, bool log, int filterType):visualise(gif), data(filterType)
 {
     data.gotCAMmsg  = false;
     data.gotPOSEmsg = false;
@@ -105,7 +106,11 @@ void Onboard::updateOnboard()
 
             sensorUpdate();
 
-            bool dbUpdated = updateMappingFP(&data);
+            bool dbUpdated = false;
+
+            if(data.gotPOSEmsg || data.gotCAMmsg){
+                dbUpdated = updateMappingFP(&data);
+            }
 
             if(log_data && dbUpdated){
                 fpDatalink *fpData = data.getFpData();
@@ -133,8 +138,8 @@ void Onboard::updateOnboard()
 
 void Onboard::simulation()
 {
-    std::string campath = filedir + "measurement/" + filename + ".fpBIN";
-    std::string pospath = filedir + "pose/" + filename + ".fpBIN";
+    std::string campath = filedir + "measurement/20-04-04Test/" + filename + ".fpBIN";
+    std::string pospath = filedir + "pose/20-04-04Test/" + filename + ".fpBIN";
 
     uint32_t frame = 0;
     measfile = fopen(campath.c_str(), "rb");
@@ -273,11 +278,13 @@ bool Onboard::camUpdate()
 {
     harrisMessageFP sensorMsg;
     camMessage fpMsg;
+    vehicleState vEst;
 
     bool msgGrab = camera->harrisMsgBuf.pop(&sensorMsg);
     if (msgGrab){
+        vEst = data.v_latent[0];
         fpMsg.time_stmp     = sensorMsg.time;
-        fpMsg.sendT         = sensorMsg.sendT;
+        fpMsg.arrivalT      = vEst.timestamp;       // Time of cam message arrival to filter coinvides with most recent nav solution
         fpMsg.imgHeight     = sensorMsg.imageHeight;
         fpMsg.imgWidth      = sensorMsg.imageWidth;
 
@@ -290,16 +297,17 @@ bool Onboard::camUpdate()
         for(int i = 0; i < constants::MAXFPS; i++){
 
             if(sensorMsg.fpVal[i] > constants::harrisValThresh){
-                double fpLocRow = (sensorMsg.fpCoord[i][1] - 0.5*(double)fpMsg.imgHeight)/(0.5*(double)fpMsg.imgHeight)*constants::IMAGESIZEV/((double)constants::IMAGESIZEH);
-                double fpLocCol = (sensorMsg.fpCoord[i][0] - 0.5*((double)fpMsg.imgWidth))/(0.5*(double)fpMsg.imgWidth)*constants::IMAGESIZEH/((double)constants::IMAGESIZEH);
+                double fpLocRow = (sensorMsg.fpCoord[i][1] - 0.5*(double)fpMsg.imgHeight)/(0.5*(double)fpMsg.imgHeight)*((double)fpMsg.imgHeight/(double)fpMsg.imgWidth);//constants::IMAGESIZEV/((double)constants::IMAGESIZEH);
+                double fpLocCol = (sensorMsg.fpCoord[i][0] - 0.5*((double)fpMsg.imgWidth))/(0.5*(double)fpMsg.imgWidth);//*constants::IMAGESIZEH/((double)constants::IMAGESIZEH);
                 fpMsg.fpLocNorm[j][0] = fpLocCol;
                 fpMsg.fpLocNorm[j][1] = fpLocRow;
                 j++;
             }
         }
-
+        printf("\n%i", j);
         fpMsg.NUMFPS = j;
         if(j > 0){
+
             data.setCamMsg(&fpMsg);
 
             if(log_data){
@@ -364,14 +372,18 @@ void Onboard::logEstimates()
 
 void Onboard::sensorUpdate()
 {
-    data.gotCAMmsg = camUpdate();
     data.gotPOSEmsg = vehicleUpdate();
+    data.gotCAMmsg = camUpdate();
 }
 
 
 void Onboard::stopOnboard()
 {
     time_to_exit = true;
+    if(ViconThread.joinable()){
+        ViconThread.join();
+    }
+
     printf("\n\nCLOSING FILES\n");
     fpEstFile->close();
     fpMeasFile->close();
@@ -484,7 +496,7 @@ void Onboard::getViconData(){
                     jevoisPos[0] = JevoisXYZ.Translation[0]*0.001; jevoisPos[1] = JevoisXYZ.Translation[1]*0.001; jevoisPos[2] = JevoisXYZ.Translation[2]*0.001;
                     double ViconQuat[4] = {JevoisQuat.Rotation[3], JevoisQuat.Rotation[0], JevoisQuat.Rotation[1], JevoisQuat.Rotation[2]};
                     double q_vb2b[4] = {0., 1., 0., 0.};
-                    quat_mult(ViconQuat, q_vb2b, jevoisAtt);
+                    quatmult(ViconQuat, q_vb2b, jevoisAtt);
                 }else if ((SubjectName == "Wand") || (SegmentName == "Wand")){
                     unsigned int MarkerCount = MyClient.GetMarkerCount(SubjectName).MarkerCount;
                     for (unsigned int MarkerIndex = 0; MarkerIndex < MarkerCount; ++MarkerIndex){
@@ -530,10 +542,12 @@ void Onboard::startViconThread(){
 
     // Connect to a server
     printf("\n\nConnecting to Vicon at %s ...", HostName.c_str());
-    while( !MyClient.IsConnected().Connected )
-    {
+    using namespace std;
+    using namespace std::chrono;
+    int deltaT;
+    time_point<high_resolution_clock> time1 = high_resolution_clock::now();
+    do{
         // Direct connection
-
         bool ok = false;
         ok =( MyClient.Connect( HostName ).Result == Result::Success );
         if(!ok)
@@ -543,8 +557,11 @@ void Onboard::startViconThread(){
 
         printf(".");
         sleep(1);
-    }
-    printf("\n\nConnected to Vicon at %s\n", HostName.c_str());
+        time_point<high_resolution_clock> time2 = high_resolution_clock::now();
+        deltaT = duration_cast<duration<int,std::milli>>(time2 - time1).count();
+    }while( !MyClient.IsConnected().Connected && deltaT < 5000 && !time_to_exit);
+
+    fprintf(stderr,"\n\nConnected to Vicon at %s\n", HostName.c_str());
     // Enable some different data types
     MyClient.EnableSegmentData();
     MyClient.EnableMarkerData();
@@ -568,10 +585,13 @@ void Onboard::startViconThread(){
             printf(".");
         }
 
+        double ViconLatency = MyClient.GetLatencyTotal().Total;
+
         time_point<system_clock,microseconds> ts = time_point_cast<microseconds>(system_clock::now());
         uint64_t time_stmp = ts.time_since_epoch().count();
         unsigned short SubjectCount = MyClient.GetSubjectCount().SubjectCount;
         double jevoisPos[3], jevoisAtt[4], fpPos[5][3];
+        int num = 5;
         for(unsigned short SubIndex = 0; SubIndex < SubjectCount; ++SubIndex){
             // Get subject name
             std::string SubjectName = MyClient.GetSubjectName(SubIndex).SubjectName;
@@ -587,8 +607,8 @@ void Onboard::startViconThread(){
                     jevoisPos[0] = JevoisXYZ.Translation[0]*0.001; jevoisPos[1] = JevoisXYZ.Translation[1]*0.001; jevoisPos[2] = JevoisXYZ.Translation[2]*0.001;
                     double ViconQuat[4] = {JevoisQuat.Rotation[3], JevoisQuat.Rotation[0], JevoisQuat.Rotation[1], JevoisQuat.Rotation[2]};
                     double q_vb2b[4] = {0., 1., 0., 0.};
-                    quat_mult(ViconQuat, q_vb2b, jevoisAtt);
-                }else if ((SubjectName == "Wand") || (SegmentName == "Wand")){
+                    quatmult(ViconQuat, q_vb2b, jevoisAtt);
+                }else if (false){//((SubjectName == "Wand") || (SegmentName == "Wand")){
                     unsigned int MarkerCount = MyClient.GetMarkerCount(SubjectName).MarkerCount;
                     for (unsigned int MarkerIndex = 0; MarkerIndex < MarkerCount; ++MarkerIndex){
                         // Get marker name
@@ -602,9 +622,23 @@ void Onboard::startViconThread(){
                 }
             }
         }
-        std::string msg = std::to_string(time_stmp) + "," + std::to_string(jevoisPos[0]) + "," + std::to_string(jevoisPos[1]) + "," + std::to_string(jevoisPos[2]) + "," +
+        // Get the labeled markers
+        unsigned int LabeledMarkerCount = MyClient.GetLabeledMarkerCount().MarkerCount;
+        for (unsigned int LabeledMarkerIndex = 0; LabeledMarkerIndex < LabeledMarkerCount; ++LabeledMarkerIndex)
+        {
+          // Get the global marker translation
+          Output_GetLabeledMarkerGlobalTranslation _Output_GetLabeledMarkerGlobalTranslation =
+            MyClient.GetLabeledMarkerGlobalTranslation(LabeledMarkerIndex);
+
+            fpPos[0][0] =  _Output_GetLabeledMarkerGlobalTranslation.Translation[0];
+            fpPos[0][1] = _Output_GetLabeledMarkerGlobalTranslation.Translation[1];
+            fpPos[0][2] = _Output_GetLabeledMarkerGlobalTranslation.Translation[2];
+        }
+
+        std::string msg = std::to_string(time_stmp) + "," + std::to_string(ViconLatency) + "," + std::to_string(jevoisPos[0]) + "," + std::to_string(jevoisPos[1]) + "," + std::to_string(jevoisPos[2]) + "," +
                 std::to_string(jevoisAtt[0]) + "," + std::to_string(jevoisAtt[1]) + "," + std::to_string(jevoisAtt[2]) + "," + std::to_string(jevoisAtt[3]);
-        for ( int l = 0; l < 5; l++)
+        num = 1;
+        for ( int l = 0; l < num; l++)
             msg += "," + std::to_string(fpPos[l][0]) + "," + std::to_string(fpPos[l][1]) + "," + std::to_string(fpPos[l][2]);
         viconfile.saveData(msg);
     }
@@ -616,6 +650,6 @@ void Onboard::startViconThread(){
     MyClient.DisableUnlabeledMarkerData();
     MyClient.DisableDeviceData();
     // Disconnect and dispose
-    printf("\n\nDisconnecting ...\n");
+    fprintf(stderr,"\n\nDisconnecting ...\n");
     MyClient.Disconnect();
 }

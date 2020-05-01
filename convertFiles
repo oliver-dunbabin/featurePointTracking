@@ -1,0 +1,35 @@
+#!/bin/bash
+# Script to run convertfpBin on directory of files
+
+PWD=`pwd`
+if [ $# == 2 ]; then
+	DIR=$1
+	if [[ $DIR = ./* ]]; then
+	 	DIR="${DIR:2}"
+	elif [[ $DIR = .* ]]; then
+		DIR="${DIR:1}"
+	else
+		continue
+	fi
+	DIR="${PWD}/${DIR}"
+	printf "\n**Attempting to create files in: $DIR**\n"
+	FILETYPE=$2
+	if [[ -d $DIR ]]; then
+		for FILENAME in $DIR/*.fpBIN; do
+			if [[ -e $FILENAME ]]; then
+				echo
+				./convertfpbin "$FILENAME" "$FILETYPE"
+			else
+				printf "\n\t$FILENAME is not a valid \"*.fpBIN\" file.\n\n"
+
+			fi
+		done
+	else
+		printf "\n\t\"$DIR\" is not a valid directory.\n\tMaybe you forgot the prefix \"./\"?\n\n"
+		exit 1
+	fi
+else
+	printf "\n\t\"./convertFiles\" command requires TWO and ONLY TWO input arguments\n\tArgument #1 required to be relative path to directory of .fpBIN files to be converted to .txt files\n\tArgument #2 must be the FILETYPE of the .fpBIN file.\n\n"
+	./convertfpbin -O
+	exit 1
+fi 

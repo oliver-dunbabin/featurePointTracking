@@ -18,8 +18,8 @@ class Onboard
 {
 public:
 
-    Onboard(bool log);
-    Onboard(std::string file, std::string path, bool log);
+    Onboard(bool log, int filterType);
+    Onboard(std::string file, std::string path, bool log, int filterType);
     ~Onboard();
 
     bool time_to_exit;
@@ -38,7 +38,6 @@ private:
 
     bool gif = false;
     bool log_data;
-    bool first_vEst = true;
     bool use_vicon = true;
     std::thread ViconThread;
     JevoisSerialPort *sPort;

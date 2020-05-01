@@ -35,6 +35,10 @@ void quatmult(double q1[4], double q2[4], double q[4]);
 
 void quatinv(double q1[4], double q[4]);
 
+void quatNorm(double q[4]);
+
+void map_vector(const double T[3][3], const double vin[3], double vout[3] );
+
 void poseTrans(std::string orientation, double q[], double pos[3], double corrq[], double corrpos[3]);
 
 void posTrans(std::string orientation, double pos[3], double corrpos[3]);

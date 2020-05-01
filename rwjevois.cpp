@@ -44,7 +44,7 @@ void rwJevois::init_counters()
 
 void rwJevois::init_camera_proc()
 {
-    const std::vector<std::string> msg {"setpar serout USB\0", "setmapping2 YUYV 320 240 29 OliverDunbabin HarrisCorner\0"};
+    const std::vector<std::string> msg {"setpar serout USB\0", "setmapping2 YUYV 320 240 28.3 OliverDunbabin HarrisCorner\0"}; // Changed resolution to match aspect ratio of camera sensor
     for (auto& x : msg){
         std::string full_msg;
         write_messages(x);

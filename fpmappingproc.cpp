@@ -5,6 +5,7 @@
 #include <string.h>
 #include <vector>
 #include <iostream>
+#include "coordinatetransform.h"
 
 bool sortDescending(const std::pair<int,int> &a,const std::pair<int,int> &b)
 {
@@ -25,7 +26,7 @@ void initDataStructs(shared *data)
             fpMeas->assign_fp[i] = -1;
 
         for (int i = 0; i<NUMFPMEAS; i++)
-            data->fpR[i][i] = SIGMAFPMEAS;
+            data->fpR[i][i] = SIGMAFPMEAS*SIGMAFPMEAS;
         double fpQdiag[NUMFPSTATES] = {0, 0, 0, SQ(0), SQ(0), SQ(0)};
         mat_diag((double *)data->fpQ, NUMFPSTATES, NUMFPSTATES, fpQdiag);
     }
@@ -42,10 +43,10 @@ bool updateMappingFP(shared *data)
 
     // Update measurement model
     if((data->gotCAMmsg) && (data->v_latent_initialised)){
-//        printf("\n%f", dt.count());
         doCorrespondance(false, data);
         updateFPmeas(data);
         updatefpDatalink(data);
+
         return true;
     }
     return false;
@@ -77,18 +78,26 @@ void updateFPmeas(shared *data)
     fpDatabase *fpEst = data->getFpStates();
     camMessage *fpMeas = data->getCamMsg();
     vehicleState *vEst = data->getVState();
+    fprintf(stderr,"ID:\t%i\n",fpEst->newFpID);
     double qEst[4] = {vEst->quat.Q0, vEst->quat.Q1, vEst->quat.Q2, vEst->quat.Q3};
+    double pEst[3] = {vEst->pos.X, vEst->pos.Y, vEst->pos.Z};
 
     // DCM from inertial frame to Camera
-    double Lc2i[3][3], Li2c[3][3];
+    double Lb2i[3][3], Li2b[3][3], Lc2i[3][3], Li2c[3][3], Lc2b[3][3];
+    double db2c_i[3];
 
-    quat2dcm321(qEst, data->Li2c);
+    quat2dcm(qEst, data->Li2b);
     for(int t = 0; t < 3; t++){
         for(int r = 0; r < 3; r++)
-            Li2c[t][r] = data->Li2c[t][r];
+            Li2b[t][r] = data->Li2b[t][r];
     }
     //std::copy(&data->Li2c[0][0], &data->Li2c[0][0]+3*3, &Li2c[0][0]);
+    mat_transpose((double *)Li2b, 3, 3, (double *)Lb2i);
+    mat_transpose((double *)Lb2c, 3, 3, (double *)Lc2b);
+    mat_mult((double *)Lb2c, 3, 3, (double *)Li2b, 3, 3, (double *)Li2c);
     mat_transpose((double *)Li2c, 3, 3, (double *)Lc2i);
+    map_vector(Lb2i, camR, db2c_i);
+    for (int t = 0; t < 3; t++){pEst[t] += db2c_i[t];}
 
     double focallengthx = (double)IMAGESIZEH/(IMAGESIZEH*tan(FOVH/2.)); //1/tan(FOVH/2.);
     double focallengthy = (double)IMAGESIZEV/(IMAGESIZEH*tan(FOVV/2.)); //1/tan(FOVV/2.);
@@ -102,9 +111,9 @@ void updateFPmeas(shared *data)
                     fpEst->newFpID++;
                     // feature point state given as:    y = [xa, ya, za, psi, theta, rho]'
                     // Set anchor position (inertial) to estimated vehicle location (inertial)
-                    fpEst->state[j][0]  = vEst->pos.X;
-                    fpEst->state[j][1]  = vEst->pos.Y;
-                    fpEst->state[j][2]  = vEst->pos.Z;
+                    fpEst->state[j][0]  = pEst[0];
+                    fpEst->state[j][1]  = pEst[1];
+                    fpEst->state[j][2]  = pEst[2];
                     // Initialise inverse depth as 0.1 (Civera et. al. 2008)
                     fpEst->state[j][5]  = RHO;
 
@@ -114,7 +123,7 @@ void updateFPmeas(shared *data)
                     double hx = 1/(sqrt(1 + SQ((fpMeas->fpLocNorm[i][0])/focallengthx) + SQ((fpMeas->fpLocNorm[i][1])/focallengthy)));
                     double hy = (fpMeas->fpLocNorm[i][0])/(focallengthx*sqrt(1 + SQ((fpMeas->fpLocNorm[i][0])/focallengthx) + SQ((fpMeas->fpLocNorm[i][1])/focallengthy)));
                     double hz = (fpMeas->fpLocNorm[i][1])/(focallengthy*sqrt(1 + SQ((fpMeas->fpLocNorm[i][0])/focallengthx) + SQ((fpMeas->fpLocNorm[i][1])/focallengthy)));
-                    double cam2fpCAM[] = {hx,hy,hz};
+                    double cam2fpCAM[3] = {hx,hy,hz};
                     double cam2fpIN[3];
                     map_vector(Lc2i,cam2fpCAM,cam2fpIN);
 
@@ -167,9 +176,9 @@ void updateFPmeas(shared *data)
                     m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
                     m[2] = -stheta;         //-sin(theta);
                     // Unit vector from vehicle location to feature point (local coordinate system)
-                    hin[0] = rho*(px - vEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
-                    hin[1] = rho*(py - vEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
-                    hin[2] = rho*(pz - vEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
+                    hin[0] = rho*(px - pEst[0]) + m[0];     // change from m/rho to (p - vEst)*rho
+                    hin[1] = rho*(py - pEst[1]) + m[1];     // change from m/rho to (p - vEst)*rho
+                    hin[2] = rho*(pz - pEst[2]) + m[2];     // change from m/rho to (p - vEst)*rho
                     // Unit vector from vehicle location to feature point (camera frame)
                     hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
                     hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
@@ -202,7 +211,7 @@ void updateFPmeas(shared *data)
                     double py    = fpEst->state[n][1];
                     double pz    = fpEst->state[n][2];
                     double Py[2][2] = {0};
-                    double Pxy[NUMFPSTATES][NUMFPSTATES] = {0};
+                    double Pxy[NUMFPSTATES][NUMFPMEAS] = {0};
                     for(int k = 0; k < L; k++){
                         double E_y[2][2], E_x[NUMFPSTATES][2];
                         double in_y[2] = {(SigMeas[k][0] - predMeas[0]),
@@ -283,9 +292,9 @@ void updateFPmeas(shared *data)
                 m[1] =  spsi*ctheta;    //sin(psi)*cos(theta);
                 m[2] = -stheta;         //-sin(theta);
                 // Unit vector from vehicle location to feature point (local coordinate system)
-                hin[0] = rho*(px - vEst->pos.X) + m[0];     // change from m/rho to (p - vEst)*rho
-                hin[1] = rho*(py - vEst->pos.Y) + m[1];     // change from m/rho to (p - vEst)*rho
-                hin[2] = rho*(pz - vEst->pos.Z) + m[2];     // change from m/rho to (p - vEst)*rho
+                hin[0] = rho*(px - pEst[0]) + m[0];     // change from m/rho to (p - vEst)*rho
+                hin[1] = rho*(py - pEst[1]) + m[1];     // change from m/rho to (p - vEst)*rho
+                hin[2] = rho*(pz - pEst[2]) + m[2];     // change from m/rho to (p - vEst)*rho
                 // Unit vector from vehicle location to feature point (camera frame)
                 hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
                 hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
@@ -428,12 +437,21 @@ void pointCorrespondance(shared *data)
     fpDatabase *fpEst = data->getFpStates();
     camMessage *fpMeas = data->getCamMsg();
     vehicleState *vEst = data->getVState();
+    double pEst[3] = {vEst->pos.X, vEst->pos.Y, vEst->pos.Z};
 
-    double Li2c[3][3];
+    double Lb2i[3][3], Li2b[3][3], Lc2i[3][3], Li2c[3][3], Lc2b[3][3];
+    double db2c_i[3];
     for(int t = 0; t < 3; t++){
         for(int r = 0; r < 3; r++)
-            Li2c[t][r] = data->Li2c[t][r];
+            Li2b[t][r] = data->Li2b[t][r];
     }
+    mat_transpose((double *)Li2b, 3, 3, (double *)Lb2i);
+    mat_transpose((double *)Lb2c, 3, 3, (double *)Lc2b);
+    mat_mult((double *)Lb2c, 3, 3, (double *)Li2b, 3, 3, (double *)Li2c);
+    mat_transpose((double *)Li2c, 3, 3, (double *)Lc2i);
+    map_vector(Lb2i, camR, db2c_i);
+    for (int t = 0; t < 3; t++){pEst[t] += db2c_i[t];}
+
     //std::copy(&data->Li2c[0][0], &data->Li2c[0][0]+3*3, Li2c[0][0]);
     double zVal[DBSIZE][fpMeas->NUMFPS];
     int expect2see_fp[DBSIZE]   = {0};
@@ -462,9 +480,9 @@ void pointCorrespondance(shared *data)
             m[0] =  cpsi*ctheta;
             m[1] =  spsi*ctheta;
             m[2] = -stheta;
-            hin[0] = rho*(px - vEst->pos.X) + m[0];
-            hin[1] = rho*(py - vEst->pos.Y) + m[1];
-            hin[2] = rho*(pz - vEst->pos.Z) + m[2];
+            hin[0] = rho*(px - pEst[0]) + m[0];
+            hin[1] = rho*(py - pEst[1]) + m[1];
+            hin[2] = rho*(pz - pEst[2]) + m[2];
             hcam[0] = Li2c[0][0]*hin[0] + Li2c[0][1]*hin[1] + Li2c[0][2]*hin[2];
             hcam[1] = Li2c[1][0]*hin[0] + Li2c[1][1]*hin[1] + Li2c[1][2]*hin[2];
             hcam[2] = Li2c[2][0]*hin[0] + Li2c[2][1]*hin[1] + Li2c[2][2]*hin[2];
@@ -621,12 +639,21 @@ void ComputeCinvD(int j, double hcam[3], double focallength[2], double Cfp[NUMFP
 {
     fpDatabase *fpEst = data->getFpStates();
     vehicleState * vEst = data->getVState();
-    double Li2c[3][3];
+    double pEst[3] = {vEst->pos.X, vEst->pos.Y, vEst->pos.Z};
+
+    double Lb2i[3][3], Li2b[3][3], Lc2i[3][3], Li2c[3][3], Lc2b[3][3];
+    double db2c_i[3];
     for(int t = 0; t < 3; t++){
         for(int r = 0; r < 3; r++)
-            Li2c[t][r] = data->Li2c[t][r];
+            Li2b[t][r] = data->Li2b[t][r];
     }
     //std::copy(&data->Li2c[0][0], &data->Li2c[0][0]+9, Li2c);
+    mat_transpose((double *)Li2b, 3, 3, (double *)Lb2i);
+    mat_transpose((double *)Lb2c, 3, 3, (double *)Lc2b);
+    mat_mult((double *)Lb2c, 3, 3, (double *)Li2b, 3, 3, (double *)Li2c);
+    mat_transpose((double *)Li2c, 3, 3, (double *)Lc2i);
+    map_vector(Lb2i, camR, db2c_i);
+    for (int t = 0; t < 3; t++){pEst[t] += db2c_i[t];}
 
     double psi      = fpEst->state[j][3];
     double theta    = fpEst->state[j][4];
@@ -670,9 +697,9 @@ void ComputeCinvD(int j, double hcam[3], double focallength[2], double Cfp[NUMFP
     // dh/dpsi      = Li2c * dm[3]/dpsi
     // dh/dtheta    = Li2c * dm[3]/dtheta
     // dh/drho      = Li2c * d(pa-vEst)/drho
-    dmdPsi[0] = -spsi*ctheta;           dmdTheta[0] = -cpsi*stheta;     drdRho[0] = px - vEst->pos.X;
-    dmdPsi[1] =  cpsi*ctheta;           dmdTheta[1] = -spsi*stheta;     drdRho[1] = py - vEst->pos.Y;
-    dmdPsi[2] =  0;                     dmdTheta[2] = -ctheta;          drdRho[2] = pz - vEst->pos.Z;
+    dmdPsi[0] = -spsi*ctheta;           dmdTheta[0] = -cpsi*stheta;     drdRho[0] = px - pEst[0];
+    dmdPsi[1] =  cpsi*ctheta;           dmdTheta[1] = -spsi*stheta;     drdRho[1] = py - pEst[1];
+    dmdPsi[2] =  0;                     dmdTheta[2] = -ctheta;          drdRho[2] = pz - pEst[2];
 
     mat_mult((double*)dzdrC,NUMFPMEAS,3,dmdPsi,3,1,dzdPsi);
     mat_mult((double*)dzdrC,NUMFPMEAS,3,dmdTheta,3,1,dzdTheta);
@@ -729,7 +756,7 @@ void findSigmaPoints(int i, fpDatabase *fpEst, double SigPoints[2*NUMFPSTATES][N
 
 /* Computes the Cholesky Decomposition U for a symmetric matrix P
  * according to:
- *  P = U^(T)*U
+ * P = U^(T)*U
  * P: Symmetric matrix
  * U: Upper triangular decomposition of P
 */
