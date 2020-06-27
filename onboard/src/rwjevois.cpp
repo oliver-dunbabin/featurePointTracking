@@ -11,6 +11,7 @@ unsigned char calculateCheckSum(unsigned char *buf, int byteCount, int index){
     return csum;
 }
 
+// Initialises serial port with string value, and creates harris message circular buffer of size CBUFLEN
 rwJevois::rwJevois(JevoisSerialPort *serial_port_):harrisMsgBuf(CBUFLEN)
 {
     //assign serial port object passed into class
@@ -20,7 +21,7 @@ rwJevois::rwJevois(JevoisSerialPort *serial_port_):harrisMsgBuf(CBUFLEN)
     init_counters();
 }
 
-
+// Initialises serial port to default value, and creates harris message circular buffer of size CBUFLEN
 rwJevois::rwJevois() : harrisMsgBuf(CBUFLEN),serial_port()
 {
     usleep(1000);
@@ -44,17 +45,19 @@ void rwJevois::init_counters()
 
 void rwJevois::init_camera_proc()
 {
+    // Configure Jevois camera to Harris Corner detection via serial port
     const std::vector<std::string> msg {"setpar serout USB\0", "setmapping2 YUYV 320 240 28.3 OliverDunbabin HarrisCorner\0"}; // Changed resolution to match aspect ratio of camera sensor
     for (auto& x : msg){
         std::string full_msg;
         write_messages(x);
         usleep(1000);
-        read_messages(full_msg);
+        read_messages(full_msg);    // Reads response from camera
         usleep(1000);
     }
 }
 
-
+// Synchronises Jevois' clock with computer
+// Because we can only set Jevois clock with second resolution, we send message on the second
 bool rwJevois::setJevoisClock()
 {
     using namespace std;

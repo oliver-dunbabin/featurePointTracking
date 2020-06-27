@@ -27,7 +27,7 @@ void initDataStructs(shared *data)
 
         for (int i = 0; i<NUMFPMEAS; i++)
             data->fpR[i][i] = SIGMAFPMEAS*SIGMAFPMEAS;
-        double fpQdiag[NUMFPSTATES] = {0, 0, 0, SQ(0), SQ(0), SQ(0)};
+        double fpQdiag[NUMFPSTATES] = {SQ(0.001), SQ(0.001), SQ(0.001), SQ(0.01), SQ(0.01), SQ(0.01)};
         mat_diag((double *)data->fpQ, NUMFPSTATES, NUMFPSTATES, fpQdiag);
     }
 }
@@ -382,7 +382,7 @@ void updateFPcov(double dt, shared *data)
         for(i=0;i<DBSIZE;i++){
             if(fpEst->fpID[i] >= 0){
                 for(j=0;j<NUMFPSTATES;j++){
-                    fpEst->fpP[i][j][j] += data->fpQ[j][j]*dt;           // fpQ currently set to zero
+                    fpEst->fpP[i][j][j] += data->fpQ[j][j]*dt;
                 }
             }
         }

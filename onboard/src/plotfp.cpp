@@ -55,12 +55,13 @@ void plotFP::plot(shared *data, int frame)
 
     std::vector<boost::tuple<double, double, double>> finalFrust;
     mat_T_mult((double *)Li2c, 3, 3, (double *)frustrum, 3, 13, (double *)transFrust);
+    // Define camera frustrum in inertia frame
     for(int i = 0; i < 13; i++){
         //finalFrust.push_back(boost::make_tuple(frustrum[0][i], frustrum[1][i], frustrum[2][i]));
         finalFrust.push_back(boost::make_tuple(transFrust[0][i]+pEst[0], transFrust[1][i]+pEst[1], transFrust[2][i]+pEst[2]));
     }
 
-    // Estimated fp Locations
+    // Estimated fp Locations from inverse depth states
     std::vector<boost::tuple<double, double, double, double>> estPos;
     for (int i = 0; i < DBSIZE; i++){
         if (fpEst->fpID[i] >= 0){
@@ -79,7 +80,7 @@ void plotFP::plot(shared *data, int frame)
     std::vector<boost::tuple<double, double>> estMeas;
     double focallengthx = IMAGESIZEH/(IMAGESIZEH*tan(FOVH/2.));
     double focallengthy = IMAGESIZEV/(IMAGESIZEH*tan(FOVV/2.));
-    // Estimated fp Measurements
+    // Project fp estimates onto camrea frame (predicted measurements)
     for (int i = 0; i < DBSIZE; i++){
         double hcam[3], hin[3];
         double px = fpEst->state[i][0];
@@ -115,6 +116,8 @@ void plotFP::plot(shared *data, int frame)
     for(int i = 0; i < fpMeas->NUMFPS; i++){
         rawMeas.push_back(boost::make_tuple(fpMeas->fpLocNorm[i][0], fpMeas->fpLocNorm[i][1]));
     }
+
+    // Finally plot estimates and measurements in separate windows
     meas << "set title \"Measurements\"\n";
     meas << "unset label 1\n";
     meas << "set label 1 \"frame no.: " + std::to_string(frame) + "\" at -0.9,-0.7 font \",14\"\n";

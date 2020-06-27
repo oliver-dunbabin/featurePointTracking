@@ -1,6 +1,7 @@
 #include "t265_connect.h"
 #include <unistd.h>
 
+// Constructor sets T265 orientation and creates circular buffer of length poseBufLen
 T265_Connect::T265_Connect(std::string orientation):pose_dataBuf(poseBufLen)
 {
     // Add pose stream
@@ -14,7 +15,7 @@ T265_Connect::T265_Connect(std::string orientation):pose_dataBuf(poseBufLen)
 
 }
 
-
+// Constructor initialises T265 to default orientation and creates circular buffer of length poseBufLen
 T265_Connect::T265_Connect():pose_dataBuf(poseBufLen)
 {
     // Add pose stream
@@ -24,6 +25,7 @@ T265_Connect::T265_Connect():pose_dataBuf(poseBufLen)
 
     time_to_exit = false;
     read_status = false;
+    config_error = false;
 }
 
 
@@ -34,6 +36,7 @@ bool T265_Connect::getData(vehicleState *X)
     vehicleState pose;
     gotMsg = pose_dataBuf.pop(&pose);
     if(gotMsg){
+        // Checks that message is a sensible value
         if(!std::isfinite(pose.quat.Q0) || !std::isfinite(pose.quat.Q1) || !std::isfinite(pose.quat.Q2) || !std::isfinite(pose.quat.Q3) ||
                 !std::isfinite(pose.pos.X) || !std::isfinite(pose.pos.Y) || !std::isfinite(pose.pos.Z)){
             status = false;
@@ -49,6 +52,7 @@ bool T265_Connect::getData(vehicleState *X)
 bool T265_Connect::setData(vehicleState *X)
 {
     vehicleState pose = *X;
+    // Ensures message used to set vehicle pose is sensible value
     if(!std::isfinite(pose.quat.Q0) || !std::isfinite(pose.quat.Q1) || !std::isfinite(pose.quat.Q2) || !std::isfinite(pose.quat.Q3) ||
             !std::isfinite(pose.pos.X) || !std::isfinite(pose.pos.Y) || !std::isfinite(pose.pos.Z)){
         return false;
@@ -82,6 +86,7 @@ void T265_Connect::read_RS()
 
         read_status = true;
 
+        // Loop which reads T265 in thread
         while(read_status){
 
             vehicleState pose;
@@ -132,7 +137,7 @@ void T265_Connect::readPose(vehicleState *pose)
         double camZ = rs_data.translation.z;
 
         rs2_time_t frame_time = f.get_timestamp();
-        uint64_t frame_time_micro = static_cast<uint64_t>(frame_time*1000. + 0.5);
+        uint64_t frame_time_micro = static_cast<uint64_t>(frame_time*1000. + 0.5); // Make sure cast rounds to NEAREST microsecond
         //printf("\n\nRS frame time: %lu", frame_time_micro);
         pose->timestamp = frame_time_micro;
 
@@ -147,7 +152,7 @@ void T265_Connect::readPose(vehicleState *pose)
         X[1] = camY;
         X[2] = camZ;
         double corrq[4], corrX[3];
-        poseTrans(CamOrient,q,X,corrq,corrX);
+        poseTrans(CamOrient,q,X,corrq,corrX); // Transforms from T265 frame to vehicle body
         pose->pos.X      = corrX[0];
         pose->pos.Y      = corrX[1];
         pose->pos.Z      = corrX[2];
@@ -173,6 +178,9 @@ void T265_Connect::handle_quit()
 }
 
 
+// -------------------------------------------------------------------
+//   Quaternion operations
+// -------------------------------------------------------------------
 inline rs2_quaternion quaternion_exp(rs2_vector v)
 {
     float x = v.x/2, y = v.y/2, z = v.z/2, th2, th = sqrtf(th2 = x*x + y*y + z*z);

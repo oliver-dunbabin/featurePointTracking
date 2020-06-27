@@ -22,15 +22,3 @@ shared::~shared()
     delete ptrfpStates;
     delete ptrfpData;
 }
-
-
-void shared::setCamMsg(camMessage *fpMeas)
-{
-    *ptrfpHarris = *fpMeas;
-}
-
-
-void shared::setVehicleState(vehicleState *vState)
-{
-    *ptrvState = *vState;
-}

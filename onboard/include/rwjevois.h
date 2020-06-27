@@ -6,17 +6,14 @@
 #include <stdint.h>
 #include <chrono>
 
+// Set message header data
 #define SERIAL_SYNC1 0xaa
 #define SERIAL_SYNC2 0x44
-#define JEVOISMSGID 0x96
-#define SERIAL_SEEK_SYNC1 0
-#define SERIAL_SEEK_SYNC2 1
-#define SERIAL_SEEK_ID 2
-#define SERIAL_SEEK_SIZE 3
-#define SERIAL_SEEK_DATA 4
-#define NUMCORNERS 100
+#define JEVOISMSGID 0x96 // Message ID for Harris Detector
+// Set message buffer values
+#define NUMCORNERS 100  // Number of corners detected in a frame
 #define NUMPERBIN 1
-#define CBUFLEN 20
+#define CBUFLEN 20      // Circular buffer size
 
 // Message format
 struct msg_header {
@@ -40,7 +37,7 @@ struct harrisMessageFP {
     uint8_t fpVal[NUMCORNERS*NUMPERBIN];                // Harris feature point value
 }__attribute__((packed));
 
-// Checksum calculation
+// Checksum calculation of message - used to determine if message sent to serial buffer has been corrupted
 unsigned char calculateCheckSum(unsigned char *buf, int byteCount, int index);
 
 class rwJevois
@@ -51,41 +48,43 @@ public:
     ~rwJevois();
 
     uint64_t write_count;
-    CircularBuffer<harrisMessageFP> harrisMsgBuf;
+    CircularBuffer<harrisMessageFP> harrisMsgBuf; // Circular buffer which stores messages from Jevois camera
 
-    void read_messages(std::string&);
+    void read_messages(std::string&); // Read messages arrived at serial port - stops reading upon EOL character
 
-    void read_messages();
+    void read_messages(); // Read messages arrived at serial port - stops reading upon EOL character
 
+    // Write messages to serial port with time argument - poor measure of message send delay
     int write_messages(const std::string &, std::chrono::time_point<std::chrono::system_clock> prevT);
 
+    // Writes string to serial port
     int write_messages(const std::string &);
 
-    void start();
+    void start(); // Start the read thread to continuously read from serial port
 
-    void stop();
+    void stop(); // Stop serial port read thread
 
-    bool setJevoisClock();
+    bool setJevoisClock(); // Sends current time to serial port
 
-    void handle_quit();
+    void handle_quit(); // Function to handle program exit (e.g. ctrl+c)
 
 private:
-    bool time_to_exit;
+    bool time_to_exit;  // Flag to exit read thread
     bool reading_status;
     bool writing_status;
     std::thread readThread;
 
-    JevoisSerialPort *serial_port;
+    JevoisSerialPort *serial_port; // Serial port object
 
     void init_counters();
 
-    void init_camera_proc();
+    void init_camera_proc(); // Send Jevois initialisation values to serial port
 
-    void readMsg();
+    void readMsg(); // Read Jevois Harris Corner messages from serial port buffer, and package them into harrisMessageFP
 
-    void read_thread();
+    void read_thread(); // While loop to read messages from serial buffer - uses readMsg()
 
-    void dispPreview(const harrisMessageFP msg, std::chrono::milliseconds t);
+    void dispPreview(const harrisMessageFP msg, std::chrono::milliseconds t); // Helper function to debug - displays fraction of serial port data
 
 };
 

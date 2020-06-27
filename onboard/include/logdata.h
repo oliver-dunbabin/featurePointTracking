@@ -12,17 +12,19 @@
 #define TXTWRITE 1
 #define BINWRITE 2
 
+// Logfile object used to save binary files - this code needs to be overhauled
 class LogData
 {
 public:
     LogData(std::string parentdir, int operation);
 
-    void createFilename(std::string parentdir);
+    void createFilename(std::string parentdir);     // Creates binary file filename
 
     void saveData(std::string data);
 
-    void openFile();
+    void openFile();                                // Opens binary file
 
+    // Function used to save message of type <T> to binary file
     template <typename T>
     void saveBinary(T *data, int bytesize)
     {
