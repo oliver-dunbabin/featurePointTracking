@@ -30,8 +30,12 @@ public:
     {
 
         outfile = fopen(filepath.c_str(), "a");
-        fwrite(data, bytesize, 1, outfile);
-        fclose(outfile);
+        if (outfile != nullptr){
+            fwrite(data, bytesize, 1, outfile);
+            fclose(outfile);
+        }else {
+            printf("Error opening file:\t%s\n",filepath.c_str());
+        }
     }
 
     const std::string getFilename(){return filename;}
