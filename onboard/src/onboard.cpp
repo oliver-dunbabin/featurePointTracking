@@ -138,8 +138,8 @@ void Onboard::updateOnboard()
 
 void Onboard::simulation()
 {
-    std::string campath = filedir + "measurement/20-04-04Test/" + filename + ".fpBIN";
-    std::string pospath = filedir + "pose/20-04-04Test/" + filename + ".fpBIN";
+    std::string campath = filedir + "measurement/20-02-07Test/" + filename + ".fpBIN";
+    std::string pospath = filedir + "pose/20-02-07Test/" + filename + ".fpBIN";
 
     uint32_t frame = 0;
     measfile = fopen(campath.c_str(), "rb");
