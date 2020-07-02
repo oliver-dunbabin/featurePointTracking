@@ -138,12 +138,17 @@ void Onboard::updateOnboard()
 
 void Onboard::simulation()
 {
-    std::string campath = filedir + "measurement/20-02-07Test/" + filename + ".fpBIN";
-    std::string pospath = filedir + "pose/20-02-07Test/" + filename + ".fpBIN";
+    std::string foldername = filename.substr(0,8);
+    std::string campath = filedir + "measurement/" + foldername + "Test/" + filename + ".fpBIN";
+    std::string pospath = filedir + "pose/" + foldername + "Test/" + filename + ".fpBIN";
 
     uint32_t frame = 0;
     measfile = fopen(campath.c_str(), "rb");
     posefile = fopen(pospath.c_str(), "rb");
+    if (measfile == nullptr || posefile == nullptr){
+        time_to_exit = true;
+        fprintf(stderr, "\nCould not open file. Does it exist?\n\n");
+    }
 
     while (!time_to_exit){
         camMessage fpMsg;
@@ -161,7 +166,7 @@ void Onboard::simulation()
             printf("\n\nEnd of file reached");
             break;
         }else {
-            printf("\n\ncould not open pose file");
+            //printf("\n\ncould not open pose file");
             break;
         }
 
@@ -198,7 +203,6 @@ void Onboard::simulation()
                 for(int i=0; i<DBSIZE; i++){printf("(%f,%f,%f,%f,%f,%f)", fpData->state[i][0], fpData->state[i][1], fpData->state[i][2], fpData->state[i][3],
                         fpData->state[i][4], fpData->state[i][5]);}
                 printf("\n\n\n");
-                //fpEstFile->saveBinary<fpDatalink>(fpData, sizeof(fpDatalink));
                 logEstimates();
             }
             data.gotCAMmsg = false;

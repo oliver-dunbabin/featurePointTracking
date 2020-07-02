@@ -1,4 +1,5 @@
 featurePointTracking/
+testdata/
 build-featurePointTracking-Desktop-Debug/
 *.o
 *.pro

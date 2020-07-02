@@ -64,12 +64,14 @@ private:
     // Template function to read from saved binary files (used in simulation)
     template<typename T>
     bool readFromFile(T *datastruct, const char *filename, FILE *file){
-        if (feof(file)){
-            printf("end of file reached for %s", filename);
-            return ENDFILE;
-        }else if(file != nullptr){
-            fread(datastruct, sizeof(T), 1, file);
-            return OK;
+        if(file != nullptr){
+            if (feof(file)){
+                printf("end of file reached for %s", filename);
+                return ENDFILE;
+            }else{
+                fread(datastruct, sizeof(T), 1, file);
+                return OK;
+            }
         }else{
             printf("could not open file %s", filename);
             return ERR;

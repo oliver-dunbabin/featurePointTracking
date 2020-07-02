@@ -12,7 +12,9 @@ plotFP::plotFP(bool gif)
 
 void plotFP::setup_plot()
 {
-    est  << "set terminal qt 0 size 800, 800\n";
+    est  << "set terminal qt 0 size 800,800\n";
+//    est  << "set lmargin at screen 0.1\nset rmargin at screen 0.9\nset tmargin at screen 0.7\nset bmargin at screen 0.1\n";
+//    est  << "set lmargin 0\nset rmargin 0\nset tmargin 0\nset bmargin 0\n";
     est  << "set xrange [-0.5:8]\nset yrange [0.5:-7]\nset zrange [2:-4]\n";
     est  << "set view equal xyz\n";
     est  << "set view 180, 270, 0.55, 1\n";
@@ -37,6 +39,14 @@ void plotFP::plot(shared *data, int frame)
     camMessage *fpMeas  = data->getCamMsg();
     vehicleState *vEst  = data->getVState();
 
+    // Push back current vehicle position and make tuple
+    data->plot_pos.push_back(vEst->pos);
+    int i;
+    std::vector<boost::tuple<double, double, double>> past_pos;
+    for( localPos pos : data->plot_pos){
+        past_pos.push_back(boost::make_tuple(pos.X, pos.Y, pos.Z));
+    }
+
     double frustrum[3][13] = {0.25, 0, 0.25, 0.25, 0, 0.25, 0.25, 0, 0.25, 0.25, 0, 0.25, 0.25,
                               0.25, 0, 0.25, 0.25, 0, 0.25, -0.25, 0, -0.25, -0.25, 0, -0.25, 0.25,
                               0.15, 0, 0.15, -0.15, 0, -0.15, -0.15, 0, -0.15, 0.15, 0, 0.15, 0.15};
@@ -56,16 +66,16 @@ void plotFP::plot(shared *data, int frame)
     std::vector<boost::tuple<double, double, double>> finalFrust;
     mat_T_mult((double *)Li2c, 3, 3, (double *)frustrum, 3, 13, (double *)transFrust);
     // Define camera frustrum in inertia frame
-    for(int i = 0; i < 13; i++){
+    for( i = 0; i < 13; i++){
         //finalFrust.push_back(boost::make_tuple(frustrum[0][i], frustrum[1][i], frustrum[2][i]));
         finalFrust.push_back(boost::make_tuple(transFrust[0][i]+pEst[0], transFrust[1][i]+pEst[1], transFrust[2][i]+pEst[2]));
     }
 
     // Estimated fp Locations from inverse depth states
     std::vector<boost::tuple<double, double, double, double>> estPos;
-    for (int i = 0; i < DBSIZE; i++){
+    for ( i = 0; i < DBSIZE; i++){
         if (fpEst->fpID[i] >= 0){
-            if( (fpEst->confidence[i] > 70  && fpEst->state[i][5] > 0.0) ) {
+            if( (fpEst->confidence[i] > 0  && fpEst->state[i][5] > 0.0) ) {
                 double Xc = ( fpEst->state[i][0] - pEst[0] ) + cos(fpEst->state[i][4])*cos(fpEst->state[i][3])/fpEst->state[i][5];
                 double Yc = ( fpEst->state[i][1] - pEst[1] ) + cos(fpEst->state[i][4])*sin(fpEst->state[i][3])/fpEst->state[i][5];
                 double Zc = ( fpEst->state[i][2] - pEst[2] ) - sin(fpEst->state[i][4])/fpEst->state[i][5];
@@ -81,7 +91,7 @@ void plotFP::plot(shared *data, int frame)
     double focallengthx = IMAGESIZEH/(IMAGESIZEH*tan(FOVH/2.));
     double focallengthy = IMAGESIZEV/(IMAGESIZEH*tan(FOVV/2.));
     // Project fp estimates onto camrea frame (predicted measurements)
-    for (int i = 0; i < DBSIZE; i++){
+    for ( i = 0; i < DBSIZE; i++){
         double hcam[3], hin[3];
         double px = fpEst->state[i][0];
         double py = fpEst->state[i][1];
@@ -107,13 +117,13 @@ void plotFP::plot(shared *data, int frame)
             double fpPixEst[2];
             fpPixEst[0] = hcam[1]/hcam[0]*focallengthx;
             fpPixEst[1] = hcam[2]/hcam[0]*focallengthy;
-            if (fpEst->confidence[i] > 70)
+            if (fpEst->confidence[i] > 0)
                 estMeas.push_back(boost::make_tuple(fpPixEst[0], fpPixEst[1]));
         }
     }
 
     std::vector<boost::tuple<double,double>> rawMeas;
-    for(int i = 0; i < fpMeas->NUMFPS; i++){
+    for( i = 0; i < fpMeas->NUMFPS; i++){
         rawMeas.push_back(boost::make_tuple(fpMeas->fpLocNorm[i][0], fpMeas->fpLocNorm[i][1]));
     }
 
@@ -132,8 +142,10 @@ void plotFP::plot(shared *data, int frame)
     est  << "set title \"# corresponded:    " + std::to_string(fpEst->numCorresponded) + "/" +
             std::to_string(DBSIZE) + "\" font \",20\"\n";
     est  << "splot '-' with points pt 7 ps 1 palette notitle,";
-    est  << " '-' with lines lc rgb \"red\" title 'camera FOV'\n";
+    est  << " '-' with lines lc rgb \"red\" title 'camera FOV',";
+    est  << " '-' with lines lc rgb \"grey\" title 'camera trajectory'\n";
     est.send1d(estPos);
     est.send1d(finalFrust);
+    est.send1d(past_pos);
     est.flush();
 }

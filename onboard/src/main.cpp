@@ -5,6 +5,21 @@
 void handle_quit(int sig);
 Onboard *onboard_quit;
 
+/*int main(){
+    signal(SIGINT, handle_quit);
+
+    int filterType = 0;     // 0: EKF; 1: UKF
+
+    //    Onboard onboard(true, filterType);
+    //    onboard_quit = &onboard;
+    //    onboard.updateOnboard();
+        //onboard.testSensors();
+        //onboard.testCamera();
+      Onboard onboard("20-03-22_20-31-07","/home/oliver/MySoftware/featurePointTracking/testdata/", false, filterType);
+      onboard_quit = &onboard;
+      onboard.simulation();
+}*/
+
 int main( int argc, char *argv[] )
 {
     int i;
@@ -77,7 +92,7 @@ int main( int argc, char *argv[] )
                "\tonboard (or -o):\tRuns onboard version of mapper\n\t\twith <option1>:\t\"EKF\" or \"UKF\"\n"
                "\tcamera (or -c):\tTests camera. Accepts no options\n"
                "\tsensors (or -s):\tTests RealSense T265 and camera. Accepts no options\n"
-               "\tsimulation (or -S:\tRuns filter from saved binary files\n\t\twith\t<option1>:\t\"filename\"\n"
+               "\tsimulation (or -S):\tRuns filter from saved binary files\n\t\twith\t<option1>:\t\"filename\"\n"
                "\t\t\t<option2>:\t\"filepath\"\n\t\t\t<option3>:\t\"EKF\" or \"UKF\"\n");
     }
 

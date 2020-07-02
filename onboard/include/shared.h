@@ -7,6 +7,7 @@
 #include <cstring>
 #include <mutex>
 #include "matrix.h"
+#include <vector>
 
 
 #define EKF 0
@@ -140,6 +141,7 @@ public:
     int filter_type;                                // Use EKF or UKF? (UKF == 1; otherwise EKF)
     vehicleState v_latent[t265_LATENCY];            // Buffer of past vehicle pose messages (used for time-delay compensaiton)
     bool v_latent_initialised = false;              // Flag indicates if v_latent been initialised
+    std::vector<localPos> plot_pos;                 // Vector of past vehicle position (used to plot trajectory)
     Clock::time_point fpTimeI;                      // Initial filter time (used for error covariance a priori update)
     Clock::time_point fpTimeF;                      // Final filter time (used for error covariance a priori update) { dt = fpTimeF - fpTimeI}
     Clock timer;                                    // Shared timer used to calculate fpTimeI and fpTimeF
