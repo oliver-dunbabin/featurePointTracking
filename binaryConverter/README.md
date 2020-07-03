@@ -7,6 +7,7 @@ The executable is used as follows:
 ```
 ./convertfpbin <filename> <filetype>
 ```
+
 	where: 	<filename> is the absolute path of file to convert
 		<filetype> depends on the the type of messages to decode. One of these:
 			- **vehicleState**: vehicle state messages (in body frame)
@@ -14,6 +15,7 @@ The executable is used as follows:
 			- **fpDatabase**: feature point estimate message
 
 	or, to bring up more information
+	
 ```
 ./convertfpbin -o
 ```
