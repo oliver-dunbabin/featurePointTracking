@@ -1,3 +1,5 @@
+# Harris corner algorithm with Jevois camera
+
 ######################################################################################################################
 #
 # JeVois Smart Embedded Machine Vision Toolkit - Copyright (C) 2016 by Laurent Itti, the University of Southern
