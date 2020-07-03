@@ -26,7 +26,7 @@ The output of this executable will be the respective decoded message, in .txt fo
 		- <pos.x/y/z> 	: position of vehicle ( FRD inertial frame [m])
 		- <quat.0/1/2/3>: attitude of vehicle (quaternion representation with q0 scalar)
 
-#### camMessage message
+### camMessage message
 **camMessage**: <timestamp1> <timestamp2> <numFPS> <fp1.u> <fp1.v> <fp2.u> <fp2.v> ... <fpN.u> <fpN.v>
 	where:
 		- <timestamp1>	: Jevois time first byte of frame grabbed (time since epoch [us])
