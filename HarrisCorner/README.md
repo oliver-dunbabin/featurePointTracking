@@ -10,28 +10,9 @@ Replace the contents of the newly created HarrisCorner.C with the contents of th
 
 Change the contents of postinstall to reflect author's name and the desired camera resolution parameters for this module. The format for this document is:
 
-> \<USBmode> <USBwidth> <USBheight> <USBfps> <CAMmode> <CAMwidth> <CAMheight> <CAMfps> <Vendor> <Module\>
+> \<USBmode\> \<USBwidth\> \<USBheight\> \<USBfps\> \<CAMmode\> \<CAMwidth\> \<CAMheight\> \<CAMfps\> \<Vendor\> \<Module\>
 > CamMode can be only one of: YUYV, BAYER, RGB565
 > USBmode can be only one of: YUYV, GREY, MJPG, BAYER, RGB565, BGR24, NONE
 
 By selecting different resolutions and frame rates of the Jevois camera, we can select different computer vision modules. The contents of postinstall specify which settings will trigger the HarrisCorner module. These values need to be reflected in videomappings.cfg in the /jevois/ directory (more information on how to set this up can be found [here](http://jevois.org/doc/VideoMapping.html)).
 
-Compile the Module for host using 
-```
-./rebuild-host.sh
-```
-
-Compile the module for plaform using
-```
-./rebuild-platform.sh
-```
-
-To add module to microsd card
-```
-./rebuild-platform.sh --microsd
-```
-To add module to connected Jevois
-```
-./rebuild-platform.sh --live
-```
-Make sure the Module has been added to videomappings.cfg file in order to select it using the daemon/ on the Jevois (see http://jevois.org/doc/ModuleTutorial.html#overview)
