@@ -4,6 +4,7 @@ This program creates an executable which is used to convert recorded test data (
 ### convertfpbin
 
 The executable is used as follows:
+
 ```
 ./convertfpbin <filename> <filetype>
 ```
@@ -19,6 +20,7 @@ The executable is used as follows:
 ```
 ./convertfpbin -o
 ```
+
 The output of this executable will be the respective decoded message, in .txt format. The contents of each decoded file are specific to the message type being decoded:
 
 ### vehicleState message
