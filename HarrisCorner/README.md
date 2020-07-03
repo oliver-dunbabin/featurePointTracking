@@ -11,9 +11,9 @@ Replace the contents of the newly created HarrisCorner.C with the contents of th
 Change the contents of postinstall to reflect author's name and the desired camera resolution parameters for this module. The format for this document is:
 
 > \<USBmode\> \<USBwidth\> \<USBheight\> \<USBfps\> \<CAMmode\> \<CAMwidth\> \<CAMheight\> \<CAMfps\> \<Vendor\> \<Module\>
-
+>
 > CamMode can be only one of: YUYV, BAYER, RGB565
-
+>
 > USBmode can be only one of: YUYV, GREY, MJPG, BAYER, RGB565, BGR24, NONE
 
 By selecting different resolutions and frame rates of the Jevois camera, we can select different computer vision modules. The contents of postinstall specify which settings will trigger the HarrisCorner module. These values need to be reflected in videomappings.cfg in the /jevois/ directory (more information on how to set this up can be found [here](http://jevois.org/doc/VideoMapping.html)).
