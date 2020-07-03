@@ -4,7 +4,7 @@ Program which performs feature tracking using a monocular camera, using Harris c
 The project is organised as follows:
 - **binaryConverter/**: Takes binary files recorded by hardware operation of filter and converts them to human-readable .txt file.
 - **HarrisCorner/**: The source code for the Harris corner algorithm, ready to be created into a module for the Jevois camera.
-- **onboard/**: The onboard code which runs the filter. This code can be run in simulation mode (where binary files are used as the navigation/camera inputs into the filter, and results are plotted) or in hardware mode (where Intel RealSense T265 odometry unit gives vehicle pose, and Jevois camera extracts feature-points from the camera frames).
+- **onboard/**: The onboard code which runs the filter. This code can be run in simulation mode (where binary files are used as the navigation/camera inputs into the filter, and results are plotted) or in hardware mode (where Intel RealSense T265 odometry unit gives vehicle pose, and Jevois camera extracts feature-points from the camera frames - using Vicon motion tracking system for validation is optional).
 - **testdata/**: Some binary files of past tests using this mapping algorithm.
 
 ## Contributing
