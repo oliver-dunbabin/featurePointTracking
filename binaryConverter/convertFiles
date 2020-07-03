@@ -11,7 +11,7 @@ if [ $# == 2 ]; then
 	else
 		continue
 	fi
-	DIR="${PWD}/${DIR}"
+	DIR="/${DIR}"
 	printf "\n**Attempting to create files in: $DIR**\n"
 	FILETYPE=$2
 	if [[ -d $DIR ]]; then
@@ -25,11 +25,11 @@ if [ $# == 2 ]; then
 			fi
 		done
 	else
-		printf "\n\t\"$DIR\" is not a valid directory.\n\tMaybe you forgot the prefix \"./\"?\n\n"
+		printf "\n\t\"$DIR\" is not a valid directory.\n\tMake sure you enter the absolute path to directory!\n\n"
 		exit 1
 	fi
 else
-	printf "\n\t\"./convertFiles\" command requires TWO and ONLY TWO input arguments\n\tArgument #1 required to be relative path to directory of .fpBIN files to be converted to .txt files\n\tArgument #2 must be the FILETYPE of the .fpBIN file.\n\n"
+	printf "\n\t\"./convertFiles\" command requires TWO and ONLY TWO input arguments\n\tArgument #1 required to be absolute path to directory of .fpBIN files to be converted to .txt files\n\tArgument #2 must be the FILETYPE of the .fpBIN file.\n\n"
 	./convertfpbin -O
 	exit 1
 fi 

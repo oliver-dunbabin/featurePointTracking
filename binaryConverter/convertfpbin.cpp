@@ -4,16 +4,24 @@
 
 int main( int argc, char *argv[] ){
     if ( argc < 3 || argc > 3 ){
-        if (!strcmp(argv[1], "-O") || !strcmp(argv[1], "-o") || !strcmp(argv[1], "--options")){
-            printf("Valid options for FILETYPE:\n"
-                   "\tvehicleState:\tthe state of vehicle (body frame)\n"
-                   "\tcamMessage:\tthe raw feature point message from camera\n"
-                   "\tfpDatabase:\tthe feature point estimates\n\n");
+        if (argc == 1){
+            printf("Invalid Input\nconvertfpbin exectuable should "
+                   "be called as:\t./convertfpbin <ABSOLUTE FILEPATH> <FILETYPE> "
+                   "[eg. ./convertFPBIN data.fpBin vehicleState]\n"
+                   "use option -O for valid <FILETYPE>\n\n");
         }else{
-            printf("Invalid Input:\t%s\nExectuable should "
-                   "be called as:\tFILENAME FILETYPE "
-                   "[eg. convertFPBIN data.fpBin vehicleState]\n"
-                   "use option -O for valid FILETYPE\n\n", argv[1]);
+            if (!strcmp(argv[1], "-O") || !strcmp(argv[1], "-o") || !strcmp(argv[1], "--options")){
+                printf("Run convertfpbin executable as: ./converfpbin <ABSOLUTE FILEPATH> <FILETYPE>\n"
+                       "Valid options for <FILETYPE>:\n"
+                       "\tvehicleState:\tthe state of vehicle (body frame)\n"
+                       "\tcamMessage:\tthe raw feature point message from camera\n"
+                       "\tfpDatabase:\tthe feature point estimates\n\n");
+            }else{
+                printf("Invalid Input:\t%s\nconverfpbin exectuable should "
+                       "be called as:\t./convertfpbin <ABSOLUTE FILEPATH> <FILETYPE> "
+                       "[eg. ./convertFPBIN data.fpBin vehicleState]\n"
+                       "use option -O for valid FILETYPE\n\n", argv[1]);
+            }
         }
     }else{
         char path[200];
@@ -100,14 +108,15 @@ int main( int argc, char *argv[] ){
 
             fclose(estfile);
         }else if (!strcmp(argv[2], "-O") || !strcmp(argv[2], "-o") || !strcmp(argv[2], "--options")){
-            printf("Valid options for FILETYPE:\n"
+            printf("Run convertfpbin executable as: ./converfpbin <ABSOLUTE FILEPATH> <FILETYPE>\n"
+                   "Valid options for <FILETYPE>:\n"
                    "\tvehicleState:\tthe state of vehicle (body frame)\n"
                    "\tcamMessage:\tthe raw feature point message from camera\n"
                    "\tfpDatabase:\tthe feature point estimates\n\n");
         }else
-            printf("Invalid Input:\t%s\nExectuable should"
-                   "be called as:\tFILENAME FILETYPE "
+            printf("Invalid Input:\t%s %s\nconvertfpbin executable should "
+                   "be called as:\t./convertfpbin <ABSOLUTE FILEPATH> <FILETYPE> "
                    "[eg. convertFPBIN data.fpBin vehicleState]\n"
-                   "use option -O (or --options) for valid FILETYPEs\n\n", argv[1]);
+                   "use option -O (or --options) for valid <FILETYPE>\n\n", argv[1], argv[2]);
     }
 }

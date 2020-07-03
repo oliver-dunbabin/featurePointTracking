@@ -1,15 +1,28 @@
-CC=g++
-CFLAGS= -std=c++11
-all: convertfpbin
+IDIR := ../onboard/include
+SDIR := ../onboard/src
+ODIR := ./build
+BDIR := .
+EXE := $(BDIR)/convertfpbin
+SRC := $(SDIR)/shared.cpp $(SDIR)/matrix.cpp convertfpbin.cpp
+OBJ := $(SRC:$(SDIR)/%.cpp=$(ODIR)/%.o)
 
-convertfpbin:shared.o matrix.o convertfpbin.cpp 
-	$(CC) $(CFLAGS)  $(LPATH) shared.o matrix.o convertfpbin.cpp -o convertfpbin
+CC :=g++
+CPPFLAGS := -I$(IDIR) -MMD -MP
+CFLAGS := -Wall -std=c++11
+LDFLAGS := -Llib
 
-shared.o:shared.cpp shared.h matrix.h 
-	$(CC) $(CFLAGS) -c shared.cpp
+.PHONY: all clean
 
-matrix.o:matrix.cpp matrix.h
-	$(CC) $(CFLAGS) -c matrix.cpp
+all: $(EXE)
+
+$(EXE): $(OBJ)
+	$(CC) $(CPPFLAGS) $(LDFLAGS) $^ -o $@
+
+$(ODIR)/%.o: $(SDIR)/%.cpp | $(ODIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(BDIR) $(ODIR):
+	mkdir -p $@
 
 clean:
-	rm shared.o matrix.o convertfpbin
+	@$(RM) -rv $(ODIR)
